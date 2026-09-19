@@ -1,0 +1,121 @@
+{
+  "schemaVersion": 1,
+  "runId": "sample",
+  "timepointId": "t0",
+  "seq": 0,
+  "label": {
+    "ko": "사용자 앱 환불 체험",
+    "en": "Cardholder refund experience"
+  },
+  "chainId": 10143,
+  "contract": "0x0000000000000000000000000000000000000000",
+  "blockNumber": 1284396,
+  "capturedAt": "2026-09-19T00:00:00Z",
+  "amountUnit": "USDC",
+  "note": "온체인은 6자리 정수. 스냅샷은 USDC 단위 숫자로 변환해 기록한다.",
+  "pool": {
+    "lpDeposits": 10000,
+    "lpFeeAccrued": 2.4,
+    "lpLossApplied": 0,
+    "netAssetValue": 10002.4,
+    "advancedOutstanding": 0,
+    "cashAvailable": 10002.4,
+    "reserve": 500.4,
+    "reserveUsed": 0,
+    "capHeld": 0,
+    "externalDeployed": 0,
+    "externalFrozen": false,
+    "protocolFee": 0.2
+  },
+  "issuers": [
+    {
+      "key": "HYBRID",
+      "name": "HYBRID Travel Card",
+      "acquirerHash": "0xea2b5fc87a034a1947b3a920f51605b48a88116bdd6d455d1b25f904d81ee917",
+      "collateralInitial": 3000,
+      "collateralRemaining": 3000,
+      "outstanding": 0,
+      "effectiveLimit": 5001.2,
+      "rampUp": false,
+      "state": "Active"
+    },
+    {
+      "key": "AURA",
+      "name": "AURA Travel Card",
+      "acquirerHash": "0x5f7ebc300ba839dbfc23098f1651eed019d1d84393764651113d02bb4cd57842",
+      "collateralInitial": 600,
+      "collateralRemaining": 600,
+      "outstanding": 0,
+      "effectiveLimit": 4000,
+      "rampUp": false,
+      "state": "Active"
+    }
+  ],
+  "liquidityProviders": [
+    {
+      "name": "LP-01",
+      "deposit": 5000,
+      "sharePct": 50
+    },
+    {
+      "name": "LP-02",
+      "deposit": 3000,
+      "sharePct": 30
+    },
+    {
+      "name": "LP-03",
+      "deposit": 2000,
+      "sharePct": 20
+    }
+  ],
+  "positions": [
+    {
+      "refundKey": "0x9f41089dda4350a77a31d937da559e23e4510de39609e4a88c9fc54a20da0e1f",
+      "issuer": "HYBRID",
+      "acquirerHash": "0xea2b5fc87a034a1947b3a920f51605b48a88116bdd6d455d1b25f904d81ee917",
+      "amount": 1000,
+      "fee": 3,
+      "issuerMargin": 200,
+      "poolCoverage": 800,
+      "state": "Repaid",
+      "evidence": null,
+      "txHash": "0xa0e679503978e3d402aa279b5e856fa73f305f7e2fda046be1ba74eef56718bd",
+      "createdAtTimepoint": 0
+    }
+  ],
+  "metrics": {
+    "cumulativeCount": 1,
+    "cumulativeAdvanced": 1000,
+    "lossTotal": 0,
+    "lossRatePct": 0,
+    "repayRatePct": 100,
+    "utilizationPct": 0,
+    "acquirerTopExposure": 0,
+    "acquirerExposureLimit": 5001.2,
+    "lpDepositCap": 16667,
+    "rejectedRequests": 0
+  },
+  "events": [
+    {
+      "blockNumber": 1284396,
+      "name": "AdvanceRepaid",
+      "target": "REF-2026-001",
+      "amount": 1000,
+      "txHash": "0x40298a0e82475f78f642a9b76bf63dd648319d28e2aea9025f4f66442ae677b9"
+    },
+    {
+      "blockNumber": 1284393,
+      "name": "AdvanceIssued",
+      "target": "REF-2026-001",
+      "amount": 1000,
+      "txHash": "0xf4b183fdc1310b7ed642001287883420e25807a57c109cacd5838c4b7153b622"
+    },
+    {
+      "blockNumber": 1284392,
+      "name": "RefundConfirmed",
+      "target": "REF-2026-001",
+      "amount": 1000,
+      "txHash": "0x7d6ad5120813a704605c1dcc7a4f9507870d73da19db0d57d6555d8f108efd98"
+    }
+  ]
+}

@@ -1,0 +1,116 @@
+{
+  "schemaVersion": 1,
+  "runId": "sample",
+  "generatedAt": "2026-09-19T00:00:00Z",
+  "source": "mockup v21 · 정규 경로(사용자 앱 체험 → 시나리오 1~9) 실측",
+  "timepoints": [
+    {
+      "timepointId": "t0",
+      "seq": 0,
+      "label": {
+        "ko": "사용자 앱 환불 체험",
+        "en": "Cardholder refund experience"
+      },
+      "file": "t0.json"
+    },
+    {
+      "timepointId": "t1",
+      "seq": 1,
+      "label": {
+        "ko": "1년 정상 운영",
+        "en": "One year of normal operation"
+      },
+      "file": "t1.json"
+    },
+    {
+      "timepointId": "t2",
+      "seq": 2,
+      "label": {
+        "ko": "최종 손실 → 워터폴",
+        "en": "Confirmed loss → waterfall"
+      },
+      "file": "t2.json"
+    },
+    {
+      "timepointId": "t3",
+      "seq": 3,
+      "label": {
+        "ko": "상관 손실 → 상한 발동",
+        "en": "Correlated loss → cap triggered"
+      },
+      "file": "t3.json"
+    },
+    {
+      "timepointId": "t3b",
+      "seq": 4,
+      "label": {
+        "ko": "회수 정산",
+        "en": "Recovery settlement"
+      },
+      "file": "t3b.json"
+    },
+    {
+      "timepointId": "t4",
+      "seq": 5,
+      "label": {
+        "ko": "LP 출금 · 유동성",
+        "en": "LP withdrawal and liquidity"
+      },
+      "file": "t4.json"
+    },
+    {
+      "timepointId": "t5",
+      "seq": 6,
+      "label": {
+        "ko": "지연 후 정상 상환",
+        "en": "Delayed but repaid"
+      },
+      "file": "t5.json"
+    },
+    {
+      "timepointId": "t6",
+      "seq": 7,
+      "label": {
+        "ko": "외부 운용처 동결",
+        "en": "External venue frozen"
+      },
+      "file": "t6.json"
+    },
+    {
+      "timepointId": "t7",
+      "seq": 8,
+      "label": {
+        "ko": "체인 성공 · DB 실패",
+        "en": "Chain succeeded, ledger failed"
+      },
+      "file": "t7.json"
+    },
+    {
+      "timepointId": "t8",
+      "seq": 9,
+      "label": {
+        "ko": "부정 요청 거절",
+        "en": "Invalid requests rejected"
+      },
+      "file": "t8.json"
+    },
+    {
+      "timepointId": "t9",
+      "seq": 10,
+      "label": {
+        "ko": "발급사가 늘어날 때",
+        "en": "More issuers join"
+      },
+      "file": "t9.json"
+    },
+    {
+      "timepointId": "t9b",
+      "seq": 11,
+      "label": {
+        "ko": "자본이 몰려올 때",
+        "en": "Capital arrives"
+      },
+      "file": "t9b.json"
+    }
+  ]
+}

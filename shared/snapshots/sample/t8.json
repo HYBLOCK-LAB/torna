@@ -1,0 +1,365 @@
+{
+  "schemaVersion": 1,
+  "runId": "sample",
+  "timepointId": "t8",
+  "seq": 9,
+  "label": {
+    "ko": "부정 요청 거절",
+    "en": "Invalid requests rejected"
+  },
+  "chainId": 10143,
+  "contract": "0x0000000000000000000000000000000000000000",
+  "blockNumber": 1284448,
+  "capturedAt": "2026-09-19T00:00:00Z",
+  "amountUnit": "USDC",
+  "note": "온체인은 6자리 정수. 스냅샷은 USDC 단위 숫자로 변환해 기록한다.",
+  "pool": {
+    "lpDeposits": 8000,
+    "lpFeeAccrued": 720.48,
+    "lpLossApplied": 1081.6,
+    "netAssetValue": 7638.88,
+    "advancedOutstanding": 1000,
+    "cashAvailable": 3000,
+    "reserve": 2,
+    "reserveUsed": 648,
+    "capHeld": 0,
+    "externalDeployed": 3638.88,
+    "externalFrozen": true,
+    "protocolFee": 75
+  },
+  "issuers": [
+    {
+      "key": "HYBRID",
+      "name": "HYBRID Travel Card",
+      "acquirerHash": "0xea2b5fc87a034a1947b3a920f51605b48a88116bdd6d455d1b25f904d81ee917",
+      "collateralInitial": 3000,
+      "collateralRemaining": 2800,
+      "outstanding": 1000,
+      "effectiveLimit": 2000,
+      "rampUp": false,
+      "state": "Active"
+    },
+    {
+      "key": "AURA",
+      "name": "AURA Travel Card",
+      "acquirerHash": "0x5f7ebc300ba839dbfc23098f1651eed019d1d84393764651113d02bb4cd57842",
+      "collateralInitial": 600,
+      "collateralRemaining": 0,
+      "outstanding": 0,
+      "effectiveLimit": 0,
+      "rampUp": false,
+      "state": "Suspended"
+    }
+  ],
+  "liquidityProviders": [
+    {
+      "name": "LP-01",
+      "deposit": 5000,
+      "sharePct": 62.5
+    },
+    {
+      "name": "LP-02",
+      "deposit": 3000,
+      "sharePct": 37.5
+    }
+  ],
+  "positions": [
+    {
+      "refundKey": "0x9f41089dda4350a77a31d937da559e23e4510de39609e4a88c9fc54a20da0e1f",
+      "issuer": "HYBRID",
+      "acquirerHash": "0xea2b5fc87a034a1947b3a920f51605b48a88116bdd6d455d1b25f904d81ee917",
+      "amount": 1000,
+      "fee": 3,
+      "issuerMargin": 200,
+      "poolCoverage": 800,
+      "state": "Repaid",
+      "evidence": null,
+      "txHash": "0xa0e679503978e3d402aa279b5e856fa73f305f7e2fda046be1ba74eef56718bd",
+      "createdAtTimepoint": 0
+    },
+    {
+      "refundKey": "0x623326bbdc69494053d0deb60f14ee7729bc0385bcad6f10a79d4a51667472c7",
+      "issuer": "HYBRID",
+      "acquirerHash": "0xea2b5fc87a034a1947b3a920f51605b48a88116bdd6d455d1b25f904d81ee917",
+      "amount": 1000,
+      "fee": 3,
+      "issuerMargin": 200,
+      "poolCoverage": 800,
+      "state": "CoveredLoss",
+      "evidence": "상류 정산기관 미수취 확인서",
+      "txHash": "0x7f4c64626653e86ddbfa46d6e896fabbc657a851c3f4f325ae860b387ce8c942",
+      "createdAtTimepoint": 1
+    },
+    {
+      "refundKey": "0xf81d3e00e2f0f69279de7ca4b08c2e9ecc938adc61a6a1c2abec1ea8bdfe6376",
+      "issuer": "AURA",
+      "acquirerHash": "0x5f7ebc300ba839dbfc23098f1651eed019d1d84393764651113d02bb4cd57842",
+      "amount": 1000,
+      "fee": 3,
+      "issuerMargin": 200,
+      "poolCoverage": 800,
+      "state": "RecoveryRecorded",
+      "evidence": "매입사 β 정산 중단",
+      "txHash": "0x27dedfbd20acb5fa1ff161431a39a1d2631115d416f4d60d2cea2cd1664379be",
+      "createdAtTimepoint": 3
+    },
+    {
+      "refundKey": "0x10172677b37dd6a84362e29b985702b85c8ffc0291ce9846f35372a4a19f05ad",
+      "issuer": "AURA",
+      "acquirerHash": "0x5f7ebc300ba839dbfc23098f1651eed019d1d84393764651113d02bb4cd57842",
+      "amount": 1000,
+      "fee": 3,
+      "issuerMargin": 200,
+      "poolCoverage": 800,
+      "state": "RecoveryRecorded",
+      "evidence": "매입사 β 정산 중단",
+      "txHash": "0x649bea7a2d31b9af3ed84a9f236e07df22bf57bf57bcc24770e712738d847c43",
+      "createdAtTimepoint": 3
+    },
+    {
+      "refundKey": "0xb87b46d8d839bf7fd568bd9c8b160c6159805b399e1f250c25ab7d81cafec803",
+      "issuer": "AURA",
+      "acquirerHash": "0x5f7ebc300ba839dbfc23098f1651eed019d1d84393764651113d02bb4cd57842",
+      "amount": 1000,
+      "fee": 3,
+      "issuerMargin": 200,
+      "poolCoverage": 800,
+      "state": "RecoveryRecorded",
+      "evidence": "매입사 β 정산 중단",
+      "txHash": "0x0cb4439d624f6b6f48e8b6411d98fb63b692f96eac3689757686f236fbab9677",
+      "createdAtTimepoint": 3
+    },
+    {
+      "refundKey": "0x2fde037b48def78bc2467363ae203dff036dc54638949bd7cefe3ad49cf14948",
+      "issuer": "AURA",
+      "acquirerHash": "0x5f7ebc300ba839dbfc23098f1651eed019d1d84393764651113d02bb4cd57842",
+      "amount": 1000,
+      "fee": 3,
+      "issuerMargin": 200,
+      "poolCoverage": 800,
+      "state": "RecoveryRecorded",
+      "evidence": "매입사 β 정산 중단",
+      "txHash": "0x98639676b7b8e49ef5f6c9359caf0ac594fbb2f9d0e811103cdc32de0a7c4f98",
+      "createdAtTimepoint": 3
+    },
+    {
+      "refundKey": "0xed41a525d330e09164fa4fe28f561d7140ddfd16ae6e4808ed0869fbeacc5a6c",
+      "issuer": "HYBRID",
+      "acquirerHash": "0xea2b5fc87a034a1947b3a920f51605b48a88116bdd6d455d1b25f904d81ee917",
+      "amount": 1000,
+      "fee": 3,
+      "issuerMargin": 200,
+      "poolCoverage": 800,
+      "state": "Repaid",
+      "evidence": null,
+      "txHash": "0x797289e8c61d9c202833306cd7e41a77cefcebb01f2eaeead072b2606ffb1dd6",
+      "createdAtTimepoint": 4
+    },
+    {
+      "refundKey": "0x55226caed4d61b462ae102eee3de86e9b754552fb789cbb48641c2a42ff9dcf6",
+      "issuer": "HYBRID",
+      "acquirerHash": "0xea2b5fc87a034a1947b3a920f51605b48a88116bdd6d455d1b25f904d81ee917",
+      "amount": 1000,
+      "fee": 3,
+      "issuerMargin": 200,
+      "poolCoverage": 800,
+      "state": "Repaid",
+      "evidence": null,
+      "txHash": "0x5e417a457364187545b8a4c4edd2426af5cede770f2c9c06266e9a9f378c345f",
+      "createdAtTimepoint": 4
+    },
+    {
+      "refundKey": "0x8eede992d7a02609821b132ec33c699224dd04cf3bf5a105191368db162a2b4c",
+      "issuer": "HYBRID",
+      "acquirerHash": "0xea2b5fc87a034a1947b3a920f51605b48a88116bdd6d455d1b25f904d81ee917",
+      "amount": 1000,
+      "fee": 3,
+      "issuerMargin": 200,
+      "poolCoverage": 800,
+      "state": "Repaid",
+      "evidence": null,
+      "txHash": "0x10eae4e29159c72e7e7b27a716c6ca1f7deeb2089347e6397fb92767f76bdc49",
+      "createdAtTimepoint": 4
+    },
+    {
+      "refundKey": "0x1a7d2e956230ac961c90a2e33b98e412741f7418680ef3162cd483c009836bf9",
+      "issuer": "HYBRID",
+      "acquirerHash": "0xea2b5fc87a034a1947b3a920f51605b48a88116bdd6d455d1b25f904d81ee917",
+      "amount": 1000,
+      "fee": 3,
+      "issuerMargin": 200,
+      "poolCoverage": 800,
+      "state": "Advanced",
+      "evidence": null,
+      "txHash": "0x1b52a3130b325ba517fb20c6b40f820c25f14ccfb7d6d1fb3b71ac658612c7a1",
+      "createdAtTimepoint": 4
+    },
+    {
+      "refundKey": "0x912a5ac6050543a0e6603366dd67db78fecba45149041f08f61fce0f8f9e2663",
+      "issuer": "HYBRID",
+      "acquirerHash": "0xea2b5fc87a034a1947b3a920f51605b48a88116bdd6d455d1b25f904d81ee917",
+      "amount": 1000,
+      "fee": 3,
+      "issuerMargin": 200,
+      "poolCoverage": 800,
+      "state": "Repaid",
+      "evidence": null,
+      "txHash": "0x85caccc3d766654d803e411d52f83bb88aca672d557cfa7e150d5abd124bffdd",
+      "createdAtTimepoint": 5
+    }
+  ],
+  "metrics": {
+    "cumulativeCount": 375,
+    "cumulativeAdvanced": 375000,
+    "lossTotal": 2529.6,
+    "lossRatePct": 0.67,
+    "repayRatePct": 98.66,
+    "utilizationPct": 13.09,
+    "acquirerTopExposure": 1000,
+    "acquirerExposureLimit": 2000,
+    "lpDepositCap": 16667,
+    "rejectedRequests": 3
+  },
+  "events": [
+    {
+      "blockNumber": 1284448,
+      "name": "AdvanceRejected",
+      "target": "REF-2026-045",
+      "amount": 0,
+      "txHash": "0x131946af76d7eba232d6f544b96e4106d8e61a74304918a1c7909420e32627eb"
+    },
+    {
+      "blockNumber": 1284447,
+      "name": "AdvanceRejected",
+      "target": "REF-UNKNOWN-99",
+      "amount": 0,
+      "txHash": "0xc5306f8a893d2c5c1f85e76e9cec9b9d93327df7a6a825212b6755b4244d6bce"
+    },
+    {
+      "blockNumber": 1284444,
+      "name": "AdvanceRejected",
+      "target": "REF-2026-001",
+      "amount": 0,
+      "txHash": "0xc7255bb8f0c309af7a3b7f01ea7ee23ba07be5a2c316cc5c69991e98702f612a"
+    },
+    {
+      "blockNumber": 1284443,
+      "name": "LedgerCreditConfirmed",
+      "target": "REF-2026-001",
+      "amount": 0,
+      "txHash": "0xa11bdf55dbff1756df7fe02bbaa6dad77559e0a9424a9645ca7280eb444d5cb6"
+    },
+    {
+      "blockNumber": 1284441,
+      "name": "IdleWithdrawFailed",
+      "target": "external-lending",
+      "amount": 0,
+      "txHash": "0x19f96409614d7c606f4a71f53578414b26225337eae48a884e5f45104c782cf4"
+    },
+    {
+      "blockNumber": 1284439,
+      "name": "IdleDeployed",
+      "target": "external-lending",
+      "amount": 3638.88,
+      "txHash": "0xa4ff94aec746f577300bbd7e255e0b030d57accdd88d222ac23af77270b73ef3"
+    },
+    {
+      "blockNumber": 1284436,
+      "name": "AdvanceRepaid",
+      "target": "REF-2026-014",
+      "amount": 1000,
+      "txHash": "0x35257c67824fef0b8906a0ac2372af3c979fcd6ad3c233f544c9f8eecea45fbf"
+    },
+    {
+      "blockNumber": 1284434,
+      "name": "ReviewOpened",
+      "target": "REF-2026-014",
+      "amount": 1000,
+      "txHash": "0x9d69fcfbda03fbf2724a32c9b629581ee76d55442884a9c7f830ddac9d7c5c09"
+    },
+    {
+      "blockNumber": 1284432,
+      "name": "MarkedOverdue",
+      "target": "REF-2026-014",
+      "amount": 1000,
+      "txHash": "0x57bfb74b6d6a698a20490ffde9ec129b69a517fd94a7f3eac32052432c2d7b70"
+    },
+    {
+      "blockNumber": 1284431,
+      "name": "AdvanceIssued",
+      "target": "REF-2026-014",
+      "amount": 1000,
+      "txHash": "0xa420fca2f79c904e14d5499f8370a88631a0d2cae3e69d769abaeebdf7082b84"
+    },
+    {
+      "blockNumber": 1284429,
+      "name": "WithdrawCompleted",
+      "target": "LP-03",
+      "amount": 800,
+      "txHash": "0xb8c0e120d9edd8288e43fdf35d9ac7f25ebda87d466063d454fc9225e0656757"
+    },
+    {
+      "blockNumber": 1284427,
+      "name": "AdvanceRepaid",
+      "target": "batch",
+      "amount": 3000,
+      "txHash": "0x976c226b663e72fce1cccd6f2f6c610b2eb4bf6f0cacba153e54395e26a7b793"
+    },
+    {
+      "blockNumber": 1284424,
+      "name": "WithdrawPaid",
+      "target": "LP-03",
+      "amount": 1109,
+      "txHash": "0xcffa3cf0bdb62689d9c819f907a0f69f3aaabe4991da944b797a6ea5fe370466"
+    },
+    {
+      "blockNumber": 1284423,
+      "name": "WithdrawRequested",
+      "target": "LP-03",
+      "amount": 1909,
+      "txHash": "0x9f5b15c94fbd996d27ad668af41a7c0a4386192a62cad403602836b4e7e9ee8c"
+    },
+    {
+      "blockNumber": 1284421,
+      "name": "AdvanceIssued",
+      "target": "REF-2026-173",
+      "amount": 1000,
+      "txHash": "0x074123c8844db0669c66ab1055ef752aed06fadf471a6c57d31f5c7d78a0f5a6"
+    },
+    {
+      "blockNumber": 1284419,
+      "name": "AdvanceIssued",
+      "target": "REF-2026-172",
+      "amount": 1000,
+      "txHash": "0xbc5b8302729471cb56e343c23c27cacee94bee5fdb444742080df99498a9c066"
+    },
+    {
+      "blockNumber": 1284418,
+      "name": "AdvanceIssued",
+      "target": "REF-2026-171",
+      "amount": 1000,
+      "txHash": "0xafbfa027eaed823b0e8898537b3139caa8622d4bef63a812e2183b4f76d5c99c"
+    },
+    {
+      "blockNumber": 1284417,
+      "name": "AdvanceIssued",
+      "target": "REF-2026-170",
+      "amount": 1000,
+      "txHash": "0x3a22b592f58aaf96f78db9d9c4904618de86ca04387c0fdc49343d3f9f16b492"
+    },
+    {
+      "blockNumber": 1284415,
+      "name": "RecoveryRecorded",
+      "target": "acquirer-β",
+      "amount": 2200,
+      "txHash": "0x5e743503ff6bff1360ddcaafc956bc5ab93f5eec82a3e3da30def4abab4ade4b"
+    },
+    {
+      "blockNumber": 1284414,
+      "name": "IssuerMarginCall",
+      "target": "AURA",
+      "amount": 0,
+      "txHash": "0x52b55a5797bb55b7aa7705baec545b41df9eba1a46e9ef9776d7e545e60c2c51"
+    }
+  ]
+}

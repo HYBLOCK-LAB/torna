@@ -1,0 +1,52 @@
+/*
+ * Base styles only.
+ *
+ * The mockup's CSS is the design source — port it here rather than rebuilding
+ * with a utility framework. The charts (donut, gauge, bars) are inline SVG in
+ * the mockup and carry over as-is; no chart library is needed.
+ *
+ * Size the layout for English. The same sentence runs 30-50% longer in English
+ * than in Korean, so tuning widths against Korean copy breaks on switch.
+ */
+
+:root {
+  color-scheme: light;
+  --violet: #6D4AFF;
+  --violet-ink: #4A2ED6;
+  --ok: #0F8B5F;
+  --warn: #9A5B00;
+  --crit: #C0245E;
+  --sky: #0A6E9E;
+  --ground: #FBFAFE;
+  --surface: #FFFFFF;
+  --surface-2: #F5F3FB;
+  --line: #E4E0F0;
+  --line-2: #CFC8E4;
+  --ink: #15122A;
+  --ink-2: #4B4568;
+  --ink-3: #7D7699;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: "IBM Plex Sans", system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.mono,
+.num {
+  font-family: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+button { font: inherit; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
