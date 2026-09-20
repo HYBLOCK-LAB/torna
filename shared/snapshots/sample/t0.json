@@ -101,21 +101,24 @@
       "name": "AdvanceRepaid",
       "target": "REF-2026-001",
       "amount": 1000,
-      "txHash": "0x40298a0e82475f78f642a9b76bf63dd648319d28e2aea9025f4f66442ae677b9"
+      "txHash": "0x40298a0e82475f78f642a9b76bf63dd648319d28e2aea9025f4f66442ae677b9",
+      "timepointSeq": 0
     },
     {
       "blockNumber": 1284393,
       "name": "AdvanceIssued",
       "target": "REF-2026-001",
       "amount": 1000,
-      "txHash": "0xf4b183fdc1310b7ed642001287883420e25807a57c109cacd5838c4b7153b622"
+      "txHash": "0xf4b183fdc1310b7ed642001287883420e25807a57c109cacd5838c4b7153b622",
+      "timepointSeq": 0
     },
     {
       "blockNumber": 1284392,
       "name": "RefundConfirmed",
       "target": "REF-2026-001",
       "amount": 1000,
-      "txHash": "0x7d6ad5120813a704605c1dcc7a4f9507870d73da19db0d57d6555d8f108efd98"
+      "txHash": "0x7d6ad5120813a704605c1dcc7a4f9507870d73da19db0d57d6555d8f108efd98",
+      "timepointSeq": 0
     }
   ]
 }
