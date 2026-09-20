@@ -44,6 +44,10 @@ export const COPY = {
   'nav.confirm':       { en: 'Check it →',        ko: '확인하기 →' },
   'nav.reviewed':      { en: '✓ Review again',    ko: '✓ 다시 보기' },
   'nav.noChange':      { en: 'No change',         ko: '변화 없음' },
+  'nav.viewing':      { en: 'Viewing now',        ko: '보는 중' },
+  'nav.done':         { en: 'Viewed',             ko: '확인 완료' },
+  'nav.timepoints':   { en: 'Timepoints',        ko: '시점' },
+  'nav.viewed':       { en: 'viewed',            ko: '열람' },
   'nav.rewind':        { en: '↺ Rewind to this point', ko: '↺ 이 시점으로 되돌리기' },
 
   // ── Cardholder experience (never say "timepoint" here) ──
@@ -70,6 +74,7 @@ export const COPY = {
   'tp.t9b': { en: 'Capital arrives',               ko: '자본이 몰려올 때' },
 
   // ── Categories ──────────────────────────────────────────
+  'cat.experience': { en: 'Cardholder experience', ko: '사용자 체험' },
   'cat.normal': { en: 'Normal operation',        ko: '평상시 운영' },
   'cat.fund':   { en: 'Capital risk',            ko: '자금 위험' },
   'cat.ops':    { en: 'Incidents and recovery',  ko: '운영 사고·복구' },
