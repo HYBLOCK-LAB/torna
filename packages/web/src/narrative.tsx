@@ -144,7 +144,7 @@ export function DeltaChips({ deltas, label }: { deltas: Delta[]; label: (p: stri
   return (
     <span className="deltas">
       {deltas.map((d) => (
-        <span key={d.path} className="chip">
+        <span key={d.path} className={`chip ${d.after > d.before ? 'up' : d.after < d.before ? 'dn' : ''}`}>
           {label(d.path)} <b>{fmt(d.before)}</b>
           <span className="ar">→</span>
           <b>{fmt(d.after)}</b>

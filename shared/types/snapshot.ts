@@ -128,6 +128,12 @@ export interface EventLogEntry {
   target: string;
   amount: number;
   txHash: string;
+  /**
+   * Sequence index of the timepoint that emitted this event. Optional: the
+   * chain does not carry it, so a dump that cannot resolve it simply omits it
+   * and the row renders without a scenario tag.
+   */
+  timepointSeq?: number;
 }
 
 export interface Snapshot {

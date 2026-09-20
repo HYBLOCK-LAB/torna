@@ -14,7 +14,7 @@
  */
 
 import type { TimepointId } from '@shared/types/snapshot';
-import type { CopyKey } from '@shared/copy';
+import { t, type CopyKey, type Lang } from '@shared/copy';
 
 export interface TimepointGroup {
   key: string;
@@ -23,21 +23,70 @@ export interface TimepointGroup {
   ids: readonly TimepointId[];
 }
 
+/**
+ * t0 is deliberately absent. The cardholder run-through is not a scenario you
+ * pick from a list — it is the cardholder screen itself, and it has its own tab.
+ * Its snapshot still exists in the bundle and still serves as the "before" that
+ * t1's deltas are measured against.
+ */
 export const TIMEPOINT_GROUPS: readonly TimepointGroup[] = [
-  // t0 is the cardholder's own run-through, not an operational event.
-  { key: 'experience', copy: 'cat.experience', ids: ['t0'] },
   { key: 'normal',     copy: 'cat.normal',     ids: ['t1'] },
-  // t3b is the recovery settlement that closes t3, so it sits with it.
-  { key: 'fund',       copy: 'cat.fund',       ids: ['t2', 't3', 't3b', 't4'] },
+  // t3b and t9b are NOT here: they are second stages of t3 and t9, reached
+  // from those briefings only. See TimepointNarrative.follow.
+  { key: 'fund',       copy: 'cat.fund',       ids: ['t2', 't3', 't4'] },
   { key: 'ops',        copy: 'cat.ops',        ids: ['t5', 't6', 't7'] },
   { key: 'verify',     copy: 'cat.verify',     ids: ['t8'] },
-  // t9b is the capital that arrives after t9, same thread.
-  { key: 'grow',       copy: 'cat.grow',       ids: ['t9', 't9b'] },
+  { key: 'grow',       copy: 'cat.grow',       ids: ['t9'] },
 ];
 
 /** Every id must appear exactly once, or a timepoint becomes unreachable. */
+const FOLLOW_PARENT: Partial<Record<TimepointId, TimepointId>> = { t3b: 't3', t9b: 't9' };
+
 export function groupOf(id: TimepointId): TimepointGroup {
-  const g = TIMEPOINT_GROUPS.find((x) => x.ids.includes(id));
-  if (!g) throw new Error(`Timepoint ${id} is in no group — it would be unreachable in the navigator.`);
-  return g;
+  // A follow-up belongs to its parent's category, so opening one keeps the
+  // navigator on the thread it continues.
+  const key = FOLLOW_PARENT[id] ?? id;
+  // t0 has no group by design, so fall back to the first one rather than throw.
+  return TIMEPOINT_GROUPS.find((x) => x.ids.includes(key)) ?? TIMEPOINT_GROUPS[0];
+}
+
+/** Every timepoint the navigator offers, in order. */
+export const NAV_TIMEPOINTS = TIMEPOINT_GROUPS.flatMap((g) => g.ids);
+
+/**
+ * Where a timepoint sits in the navigator's order. A follow-up answers with
+ * its parent's position: it is not a stop of its own, so "what comes next" and
+ * "rewind to before this" both have to reason about the parent.
+ */
+export function navIndexOf(id: TimepointId): number {
+  return NAV_TIMEPOINTS.indexOf(FOLLOW_PARENT[id] ?? id);
+}
+
+/**
+ * What a timepoint is CALLED on screen. `t3b` is a file key — it belongs in the
+ * bundle and the console, not in front of a judge, and it stops meaning
+ * anything the moment the ids change. Everything the viewer reads goes through
+ * here: "Scenario 3 · follow-up".
+ */
+export function scenLabel(id: TimepointId, lang: Lang): string {
+  const parent = FOLLOW_PARENT[id];
+  const n = (parent ?? id).replace(/^t/, '');
+  return t(parent ? 'scen.numFollow' : 'scen.num', lang).replace('{n}', n);
+}
+
+/** A second stage of another timepoint (t3b, t9b) rather than a stop of its own. */
+export function isFollowUp(id: TimepointId): boolean {
+  return FOLLOW_PARENT[id] !== undefined;
+}
+
+/**
+ * The state a rewind lands on: everything up to but NOT including `id`.
+ * A follow-up rewinds to its parent (the recovery undone, the incident still
+ * standing); the first scenario rewinds to t0, the cardholder run alone.
+ */
+export function previousTimepoint(id: TimepointId): TimepointId {
+  const parent = FOLLOW_PARENT[id];
+  if (parent) return parent;
+  const i = NAV_TIMEPOINTS.indexOf(id);
+  return i > 0 ? NAV_TIMEPOINTS[i - 1] : ('t0' as TimepointId);
 }
