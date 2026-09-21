@@ -497,7 +497,7 @@ h1,h2,.panel>h3,.bs-t,.card-face .bv,.pubhead h3{
 /* 브리핑: 대시보드 패널보다 한 층 위 — 화면에서 유일하게 그림자를 가진 요소 */
 .pnote,.pnote.pn-lp,.pnote.pn-val,.pnote.pn-pub,.pnote.pn-issuer{
   position:sticky;top:46px;z-index:20;scroll-margin-top:56px;
-  max-height:calc(100vh - 64px);overflow:auto;overscroll-behavior:contain;
+  max-height:calc(100vh - 72px);overflow-y:auto;overscroll-behavior:contain;
   background:var(--surface)!important;color:var(--ink)!important;
   border:1px solid var(--line);border-left:3px solid var(--violet)!important;
   border-radius:3px;padding:15px 18px;margin-bottom:16px;
@@ -717,3 +717,65 @@ select{font:inherit;font-size:13px;padding:6px 10px;border-radius:3px;
 /* A 100% bar cuts its own label when the segment is narrow. Ellipsis says
    "there is more here" where a mid-letter cut just looks broken. */
 .stackbar div{text-overflow:ellipsis;padding-right:7px}
+
+/* A follow-up that has already been run: still reachable, no longer the thing
+   being asked for. It recedes rather than disappearing — a viewer coming back
+   to the timepoint has to be able to see the recovery again. */
+.bf-stage.done{background:var(--surface-2);border-color:var(--line)}
+.bf-stage.done p{color:var(--ink-3)}
+
+/* The states a position passed through, under its current one. Recessive: the
+   pill is the answer, this is how it got there. */
+.phist{font-size:10.5px;color:var(--ink-3);margin-top:2px;white-space:normal;line-height:1.45}
+
+/* A chip whose value is a warning rather than a movement. */
+.chip.wn b{color:var(--warn)}
+/* Chips that belong to one sentence sit under it, not beside it. */
+.rbl li .deltas{display:flex;flex-wrap:wrap;gap:6px;margin-top:5px}
+
+/* The note is portaled into a slot next to the panel it talks about. The slot
+   must not become a box: sticky only travels inside its own parent, and a
+   wrapper the same height as the card gives it nowhere to go. display:contents
+   dissolves the wrapper, so the card sticks inside the column of panels. */
+.pnote-slot{display:contents}
+.pnote-slot .pnote{margin-bottom:0}
+
+/* 이동 버튼의 기본형.
+   여태 `.watch .wgo` 와 `.rb .wgo` 로만 있어서, 브리핑 하단과 후속 블록의
+   버튼은 브라우저 기본 버튼 그대로 나왔다. 두 곳의 좁은 규칙은 그대로 두고
+   (명시도가 높아 그대로 이긴다) 바깥에 있는 것들만 여기서 받는다.
+   본문을 이기지 않는 선에서, 누르고 싶게. */
+.wgo{
+  display:inline-flex;align-items:center;gap:7px;
+  border:1px solid var(--line-2);background:var(--surface);color:var(--ink-2);
+  border-radius:999px;padding:7px 15px;font-size:12.5px;font-weight:600;
+  cursor:pointer;white-space:nowrap;
+  box-shadow:0 1px 2px rgba(20,23,28,.05);
+  transition:border-color .16s ease,color .16s ease,background .16s ease,
+             box-shadow .16s ease,transform .16s ease;
+}
+.wgo:hover{
+  border-color:var(--violet);color:var(--violet);background:var(--violet-wash);
+  box-shadow:0 2px 12px -5px rgba(110,84,255,.55);
+}
+.wgo:active{transform:translateY(1px);box-shadow:none}
+.wgo:focus-visible{outline:2px solid var(--violet);outline-offset:2px}
+
+/* 다음 시나리오로 — 초록 상자 안에 있으니 그 색을 따른다 */
+.bf-done .wgo{border-color:var(--ok);color:var(--ok)}
+.bf-done .wgo:hover{
+  background:var(--ok-wash);border-color:var(--ok);color:var(--ok);
+  box-shadow:0 2px 12px -5px rgba(14,122,79,.5);
+}
+
+/* 이미 본 후속을 다시 여는 버튼 — 길이 아니라 되짚기라 물러나 있는다 */
+.bf-stage.done .wgo{border-style:dashed;color:var(--ink-3);box-shadow:none}
+.bf-stage.done .wgo:hover{
+  border-style:solid;border-color:var(--violet);color:var(--violet);
+  background:var(--violet-wash);
+}
+
+@media (prefers-reduced-motion:reduce){
+  .wgo{transition:none}
+  .wgo:active{transform:none}
+}

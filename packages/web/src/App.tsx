@@ -23,7 +23,8 @@
  * Owner: A(서진)
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   snapshots, timepointIds, manifest, assertBundleIntegrity,
   issuerRegion, refundLabel, acquirerLabel, acquirerId,
@@ -37,8 +38,9 @@ import type {
 import {
   TIMEPOINT_GROUPS, NAV_TIMEPOINTS, groupOf, navIndexOf, scenLabel, previousTimepoint, isFollowUp,
 } from './timepoints';
-import { NARRATIVE, CHIP_FIELDS, type ScreenKey as NScreen } from '@shared/narrative';
+import { NARRATIVE, CHIP_FIELDS, type ScreenKey as NScreen, type WatchLine, type WatchChip } from '@shared/narrative';
 import { Narrative, DeltaChips, deltasFor } from './narrative';
+import type { ReactNode } from 'react';
 import { Donut, Gauge, Legend, Trail, type Slice } from './charts';
 import { CardholderApp, NextStep, type AppStatus } from './cardholder';
 import {
@@ -74,7 +76,7 @@ const n2 = (v: number) => v.toLocaleString('en-US', { maximumFractionDigits: 2 }
 const short = (h: string) => `${h.slice(0, 6)}…${h.slice(-3)}`;
 
 export default function App() {
-  const [lang] = useState<Lang>('en');
+  const [lang, setLang] = useState<Lang>('en');
   // t0: the state the cardholder run itself produced. Every scenario, t1
   // included, is then met as a card you open — never one already applied.
   const [current, setCurrent] = useState<TimepointId>('t0');
@@ -262,7 +264,7 @@ export default function App() {
         </div>
       </div>
 
-      <ChainBar s={s} lang={lang} />
+      <ChainBar s={s} lang={lang} onLang={setLang} />
 
       <div className="wrap">
         <header>
@@ -330,7 +332,9 @@ export default function App() {
       <main>
         <div className="wrap">
           {noteOpen && !onUser && (
-            <ScreenNote s={s} screen={screen} lang={lang} onClose={() => setNoteOpen(false)} />
+            <AtPanel screen={screen} anchor={NARRATIVE[s.timepointId]?.watch.find((w) => w.screen === screen && w.anchor)?.anchor}>
+              <ScreenNote s={s} screen={screen} lang={lang} onClose={() => setNoteOpen(false)} />
+            </AtPanel>
           )}
           <div className="cols">
             {screen === 'user' ? (
@@ -397,20 +401,24 @@ function Rich({ text }: { text: string }) {
 
 /* ── on-chain status bar ─────────────────────────────────────── */
 
-function ChainBar({ s, lang }: { s: Snapshot; lang: Lang }) {
+function ChainBar({ s, lang, onLang }: { s: Snapshot; lang: Lang; onLang: (lang: Lang) => void }) {
   return (
     <div className="chain">
       <div className="wrap">
         <span className="ci"><span className="ci-k">Monad Testnet</span></span>
-        <span className="ci"><span className="ci-k">chain</span><b className="mono">{s.chainId}</b></span>
-        <span className="ci"><span className="ci-k">block</span><b className="mono">{n0(s.blockNumber)}</b></span>
-        <span className="ci"><span className="ci-k">contract</span><b className="mono">{short(s.contract)}</b></span>
+        <span className="ci"><span className="ci-k">{t('chain.chain', lang)}</span><b className="mono">{s.chainId}</b></span>
+        <span className="ci"><span className="ci-k">{t('chain.block', lang)}</span><b className="mono">{n0(s.blockNumber)}</b></span>
+        <span className="ci"><span className="ci-k">{t('chain.contract', lang)}</span><b className="mono">{short(s.contract)}</b></span>
         <span className="ci">
           <span className="ci-k">{t('chain.lastEvent', lang)}</span>
           <b className="mono">{s.events[0]?.name ?? '—'}</b>
         </span>
-        <span className="ci"><span className="dot" />Envio indexer in sync</span>
-        <span className="ci"><span>{t('chain.oneLedger', lang)}</span></span>
+        <span className="ci"><span className="dot" />{t('chain.synced', lang)}</span>
+        <span className="ci switch-note"><span>{t('chain.oneLedger', lang)}</span></span>
+        <div className="seg">
+          <button type="button" aria-pressed={lang === 'en'} onClick={() => onLang('en')}>{t('app.langEn', lang)}</button>
+          <button type="button" aria-pressed={lang === 'ko'} onClick={() => onLang('ko')}>{t('app.langKo', lang)}</button>
+        </div>
       </div>
     </div>
   );
@@ -600,7 +608,11 @@ function ScenarioBrief({
   const idx = navIndexOf(s.timepointId);
   const nextPoint = idx >= 0 ? NAV_TIMEPOINTS[idx + 1] : undefined;
   const laterSeen = NAV_TIMEPOINTS.slice(idx + 1).filter((id) => reviewed.has(id)).length;
-  const follow = n.follow && !reviewed.has(n.follow.next) ? n.follow : null;
+  /* The follow-up stays on screen after it has been run — a viewer coming back
+     to this timepoint must be able to see the recovery again. What changes is
+     only whether it BLOCKS the way forward. */
+  const follow = n.follow ?? null;
+  const followDone = follow ? reviewed.has(follow.next) : false;
 
   /* Opening a timepoint whose setup you have not seen. Not a block — a nudge,
      with the door left open, because a judge who wants to jump should be able to. */
@@ -626,7 +638,12 @@ function ScenarioBrief({
   const results = (
     <div className="blocks">
       {screens.map((sc) => {
-        const deltas = deltasFor(CHIP_FIELDS[sc.key as NScreen] ?? [], s);
+        // Prefer the chips the narrative itself produced; fall back to the
+        // generic field deltas for timepoints that have no log yet.
+        const chips = (n.changed ?? [])
+          .filter((w) => w.screen === sc.key)
+          .flatMap((w) => w.chips ?? []);
+        const deltas = chips.length > 0 ? [] : deltasFor(CHIP_FIELDS[sc.key as NScreen] ?? [], s);
         const done = seen.has(sc.key);
         const anchor = n.watch.find((w) => w.screen === sc.key && w.anchor)?.anchor;
         return (
@@ -637,10 +654,23 @@ function ScenarioBrief({
                 {done ? t('nav.reviewed', lang) : t('nav.confirm', lang)}
               </button>
             </div>
-            <DeltaChips deltas={deltas} label={(path) => fieldLabel(path, lang)} />
+            {chips.length > 0
+              ? <NoteChips chips={chips} s={s} lang={lang} />
+              : <DeltaChips deltas={deltas} label={(path) => fieldLabel(path, lang)} />}
           </div>
         );
       })}
+
+      {(n.conclusion ?? []).length > 0 && (
+        <div className="rb plain">
+          <div className="rb-h">
+            <span className="wt">{t('bf.conclusion', lang)}</span>
+          </div>
+          <ul className="rbl">
+            {(n.conclusion ?? []).map((w, i) => <NoteLine key={i} w={w} s={s} lang={lang} />)}
+          </ul>
+        </div>
+      )}
 
       {stillScreens.length > 0 && (
         <div className="rb stat">
@@ -704,18 +734,14 @@ function ScenarioBrief({
             <p>{t('bf.doneAll', lang).replace('{id}', scenLabel(s.timepointId, lang))}</p>
             {/* No "next scenario" while a follow-up is outstanding: this
                 incident is not closed, and the button for it sits just below,
-                in the stage block. Two of the same button is one too many. */}
-            {follow ? null : nextPoint ? (
+                in the stage block. Once it has been run, the way forward opens. */}
+            {follow && !followDone ? null : nextPoint ? (
               <button type="button" className="wgo" onClick={() => onPick(nextPoint)}>
                 {t('bf.nextPoint', lang)
                   .replace('{id}', scenLabel(nextPoint, lang))
                   .replace('{title}', NARRATIVE[nextPoint].title[lang] || NARRATIVE[nextPoint].title.ko)}
               </button>
-            ) : (
-              <button type="button" className="wgo" onClick={() => onGo('pub')}>
-                {t('bf.seeEverything', lang)}
-              </button>
-            )}
+            ) : null}
           </div>
         </>
       ) : (
@@ -726,9 +752,15 @@ function ScenarioBrief({
       )}
 
       {applied && follow && (
-        <div className="bf-stage">
-          <p><Narrative text={follow.text} s={s} lang={lang} /></p>
-          <button type="button" className="btn" onClick={() => onApplyFollow(follow.next)}>
+        <div className={`bf-stage${followDone ? ' done' : ''}`}>
+          <p>
+            {followDone && <b>{t('bf.stageDone', lang)} </b>}
+            <Narrative text={follow.text} s={s} lang={lang} />
+          </p>
+          <button
+            type="button" className={followDone ? 'wgo' : 'btn'}
+            onClick={() => onApplyFollow(follow.next)}
+          >
             {follow.btn[lang] || follow.btn.ko}
           </button>
         </div>
@@ -760,15 +792,93 @@ function ScenarioBrief({
  * It is the only element on the page with a shadow, so it reads as an
  * instruction rather than as one more panel.
  */
+/**
+ * Puts the screen note where the thing it talks about is.
+ *
+ * A note pinned to the top of a six-panel screen makes the viewer carry the
+ * sentence down the page to find the figure. This drops it directly above the
+ * panel its first line points at, and leaves it sticky so it stays readable
+ * while that panel is on screen. With no anchor — or before the panel exists —
+ * it renders where it stands, at the top.
+ *
+ * The portal is what keeps the four screen components unaware of any of this.
+ */
+function AtPanel({
+  screen, anchor, children,
+}: { screen: ScreenKey; anchor?: string; children: ReactNode }) {
+  const [host, setHost] = useState<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!anchor) { setHost(null); return; }
+    const panel = document.getElementById(anchor);
+    if (!panel || !panel.parentNode) { setHost(null); return; }
+    const slot = document.createElement('div');
+    slot.className = 'pnote-slot';
+    panel.parentNode.insertBefore(slot, panel);
+    setHost(slot);
+    return () => { slot.remove(); };
+    // screen is in the deps because the panels are replaced wholesale on a tab change.
+  }, [anchor, screen]);
+
+  return host ? createPortal(children, host) : <>{children}</>;
+}
+
+/**
+ * The figures a narrative line produced. The same chips appear in two places —
+ * in the screen note beside the sentence, and in the briefing's result row for
+ * that screen — so a viewer who read the briefing recognises them when they
+ * arrive at the screen.
+ */
+function NoteChips({ chips, s, lang }: { chips: WatchChip[]; s: Snapshot; lang: Lang }) {
+  if (chips.length === 0) return null;
+  return (
+    <span className="deltas">
+      {chips.map((c, j) => {
+        const tone = c.tone === 'ok' ? ' up' : c.tone === 'crit' ? ' dn' : c.tone === 'warn' ? ' wn' : '';
+        if (c.tx) {
+          // The receipt for the claim in the sentence. Loud when the event name
+          // is not in this bundle — an event renamed in the contract has to be
+          // visible here, not silently dropped.
+          const ev = s.events.find((e) => e.name === c.tx);
+          if (!ev) return <b key={j} className="narr-miss">⟨tx:{c.tx}⟩</b>;
+          return (
+            <span key={j} className="chip tx mono">
+              <span className="hashlink">{short(ev.txHash)}</span>
+            </span>
+          );
+        }
+        return (
+          <span key={j} className={`chip${tone}`}>
+            {c.k[lang] || c.k.ko} <b><Narrative text={c.v} s={s} lang={lang} /></b>
+          </span>
+        );
+      })}
+    </span>
+  );
+}
+
+/** One line of a screen note: the sentence, then its figures as chips. */
+function NoteLine({ w, s, lang }: { w: WatchLine; s: Snapshot; lang: Lang }) {
+  return (
+    <li>
+      <Narrative text={w.text} s={s} lang={lang} />
+      {w.chips && <NoteChips chips={w.chips} s={s} lang={lang} />}
+    </li>
+  );
+}
+
 function ScreenNote({
   s, screen, lang, onClose,
 }: { s: Snapshot; screen: ScreenKey; lang: Lang; onClose: () => void }) {
   const n = NARRATIVE[s.timepointId];
   if (!n) return null;
 
+  const changed = (n.changed ?? []).filter((w) => w.screen === (screen as NScreen));
   const lines = n.watch.filter((w) => w.screen === (screen as NScreen));
-  const deltas = deltasFor(CHIP_FIELDS[screen as NScreen] ?? [], s);
-  if (lines.length === 0 && deltas.length === 0) return null;
+  const deltas = changed.length > 0
+    ? []                                   // the log already carries its own figures
+    : deltasFor(CHIP_FIELDS[screen as NScreen] ?? [], s);
+  if (changed.length === 0 && lines.length === 0 && deltas.length === 0) return null;
 
   return (
     <div className="pnote">
@@ -776,6 +886,15 @@ function ScreenNote({
         <b>{t('bf.onThisScreen', lang).replace('{id}', scenLabel(s.timepointId, lang))}</b>
         <button type="button" className="pn-x" onClick={onClose}>{t('bf.close', lang)}</button>
       </div>
+
+      {changed.length > 0 && (
+        <>
+          <p className="pn-k">{t('bf.changed', lang)}</p>
+          <ul className="rbl">
+            {changed.map((w, i) => <NoteLine key={i} w={w} s={s} lang={lang} />)}
+          </ul>
+        </>
+      )}
 
       {deltas.length > 0 && (
         <>
@@ -788,9 +907,7 @@ function ScreenNote({
         <>
           <p className="pn-k">{t('bf.watch', lang)}</p>
           <ul className="rbl">
-            {lines.map((w, i) => (
-              <li key={i}><Narrative text={w.text} s={s} lang={lang} /></li>
-            ))}
+            {lines.map((w, i) => <NoteLine key={i} w={w} s={s} lang={lang} />)}
           </ul>
         </>
       )}
@@ -917,7 +1034,7 @@ function PublicView({ s, lang, settleSeconds, trail }: { s: Snapshot; lang: Lang
           <Tile k={t('tile.repayRate', lang)} v={`${n2(m.repayRatePct)}%`} />
           <Tile
             k={t('tile.lossRate', lang)} v={`${n2(m.lossRatePct)}%`}
-            u={t('tile.breakeven', lang)} tone={m.lossRatePct > 0.35 ? 'crit' : undefined}
+            u={tp('tile.breakeven', lang)} tone={m.lossRatePct > PARAMS.breakEvenPct ? 'crit' : undefined}
           />
           <Tile
             k={t('tile.rejected', lang)} v={n0(m.rejectedRequests)}
@@ -942,8 +1059,8 @@ function PublicView({ s, lang, settleSeconds, trail }: { s: Snapshot; lang: Lang
             u={t('tile.againstLimit', lang)}
             tone={m.acquirerTopExposure > m.acquirerExposureLimit ? 'crit' : undefined}
           />
-          <Tile k={t('tile.acquirerConc', lang)} v={`${n2(acquirerConcentrationPct(s))}%`}
-                u={t('tile.spreadOnly', lang)} />
+          {/* Concentration lives in the risk panel, where the watch lines point
+              and where the "indicator, not a limit" caption sits. */}
           <Tile k={t('tile.capacityLeft', lang)} v={n0(p.cashAvailable)} u="USDC" />
           <Tile k={t('tile.newIssuerCap', lang)} v={n0(newIssuerCap(s))} u="USDC" />
           <Tile
@@ -1191,6 +1308,14 @@ function LpView({ s, lang }: { s: Snapshot; lang: Lang }) {
      the bundle carries. */
   const months = year.lpShare > 0 ? (Math.max(0, -lpNet) / year.lpShare) * 12 : 0;
   const yearLoaded = s.seq >= snapshots.t1.seq;
+  /* The baseline belongs to the timepoint that loads it, and nowhere else.
+     From scenario 2 on, "365 refunds" sitting beside the public view's running
+     count reads as one of the two being wrong — and the year is one click away
+     in scenario 1 if anyone wants it back.
+
+     What survives is the sentence under it: loss against the year's income is
+     exactly the judgement the later timepoints need. */
+  const yearIsHeadline = s.seq === snapshots.t1.seq;
   const collateral = s.issuers.reduce((a, i) => a + i.collateralRemaining, 0);
   const { instant, queued, locked, reviewCoverage } = withdrawalSplit(s);
 
@@ -1238,9 +1363,11 @@ function LpView({ s, lang }: { s: Snapshot; lang: Lang }) {
           then the pool below is still at its opening balance, and a panel
           announcing 365 refunds over a pool that has handled one would be the
           screen contradicting itself. */}
-      {yearLoaded && (
+      {yearLoaded && yearIsHeadline && (
       <div className="panel" id="p-lp-year">
-        <h3>{t('panel.yearSummary', lang)} <span className="pill w">{t('panel.assumed', lang)}</span></h3>
+        <h3>
+          {t('panel.yearSummary', lang)} <span className="pill w">{t('panel.assumed', lang)}</span>
+        </h3>
         <p className="hint">{tp('hint.yearSummary', lang)}</p>
         <div className="tiles">
           <Tile k={t('tile.count', lang)} v={n0(year.count)} />
@@ -1250,15 +1377,39 @@ function LpView({ s, lang }: { s: Snapshot; lang: Lang }) {
           <Tile k={t('tile.lpAnnual', lang)} v={`${n2(year.annualPct)}%`} />
         </div>
         <p className="note c">
-          {p.lpLossApplied > 0
-            ? t('lp.yearNoteLoss', lang)
+          {/* Three states, and they say different things. No loss at all; a
+              loss the year's income still covers, where "months to recover"
+              would be zero and meaningless; and a loss that has outrun the
+              income, which is the only case with a recovery period. */}
+          {p.lpLossApplied <= 0
+            ? tp('lp.yearNoteClean', lang)
+            : lpNet >= 0
+            ? tp('lp.yearNoteHeld', lang)
+                .replace('{loss}', n2(s.metrics.lossRatePct))
+                .replace('{lost}', n0(p.lpLossApplied))
+                .replace('{net}', `+${n0(lpNet)}`)
+            : tp('lp.yearNoteLoss', lang)
                 .replace('{loss}', n2(s.metrics.lossRatePct))
                 .replace('{net}', n0(lpNet))
                 .replace('{fee}', n0(year.lpShare))
-                .replace('{months}', n2(months))
-            : t('lp.yearNoteClean', lang)}
+                .replace('{months}', n2(months))}
         </p>
       </div>
+      )}
+
+      {yearLoaded && !yearIsHeadline && p.lpLossApplied > 0 && (
+        <p className="note c" style={{ margin: 0 }}>
+          {lpNet >= 0
+            ? tp('lp.yearNoteHeld', lang)
+                .replace('{loss}', n2(s.metrics.lossRatePct))
+                .replace('{lost}', n0(p.lpLossApplied))
+                .replace('{net}', `+${n0(lpNet)}`)
+            : tp('lp.yearNoteLoss', lang)
+                .replace('{loss}', n2(s.metrics.lossRatePct))
+                .replace('{net}', n0(lpNet))
+                .replace('{fee}', n0(year.lpShare))
+                .replace('{months}', n2(months))}
+        </p>
       )}
 
       <div className="panel" id="p-lp-funds">
@@ -1573,7 +1724,17 @@ function IssuerView({ s, lang, pipe }: { s: Snapshot; lang: Lang; pipe: number }
                   <td className="num">{n0(p.amount)}</td>
                   <td className="num">{n2(p.fee)}</td>
                   <td className="num">{n0(p.issuerMargin)}</td>
-                  <td><PositionState state={p.state} lang={lang} /></td>
+                  <td>
+                    <PositionState state={p.state} lang={lang} />
+                    {/* The path, not just the destination. "Repaid" alone hides
+                        that this one went overdue and through a review first —
+                        which is the whole point of scenario 5. */}
+                    {p.history && p.history.length > 1 && (
+                      <div className="phist">
+                        {p.history.map((h) => t(`state.${h}` as CopyKey, lang)).join(' → ')}
+                      </div>
+                    )}
+                  </td>
                   <td className="mono"><span className="hashlink">{short(p.txHash)}</span></td>
                 </tr>
               ))}
@@ -1595,7 +1756,7 @@ function IssuerState({ state, rampUp, lang }: { state: IssuerStateT; rampUp: boo
   return (
     <>
       <span className={`pill ${tone}`}>{t(`issuerState.${state}` as CopyKey, lang)}</span>
-      {rampUp && <span className="hint"> ramp-up</span>}
+      {rampUp && <span className="hint"> {t('iss.rampUp', lang)}</span>}
     </>
   );
 }

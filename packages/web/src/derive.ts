@@ -164,6 +164,8 @@ export interface YearOne {
   protocolShare: number;
   /** LP share against LP deposits — one year, so this is already annual. */
   annualPct: number;
+  /** Of those refunds, the ones that closed: the year minus what is still under review. */
+  closed: number;
 }
 
 /**
@@ -178,8 +180,10 @@ export function yearOne(t0: Snapshot, t1: Snapshot): YearOne {
   const lpShare = t1.pool.lpFeeAccrued - t0.pool.lpFeeAccrued;
   const reserveShare = t1.pool.reserve - t0.pool.reserve;
   const protocolShare = t1.pool.protocolFee - t0.pool.protocolFee;
+  const stillOpen = t1.positions.filter((p) => p.state === 'Review' || p.state === 'Overdue').length;
   return {
     count,
+    closed: Math.max(0, count - stillOpen),
     feeTotal: lpShare + reserveShare + protocolShare,
     lpShare,
     reserveShare,
@@ -206,4 +210,165 @@ export function newIssuerCap(s: Snapshot): number {
   const poolCapacity = Math.max(0, s.pool.netAssetValue - s.pool.externalDeployed);
   const share = Math.max(PARAMS.issuerConcentrationPct / 100, 1 / Math.max(1, s.issuers.length));
   return poolCapacity * share;
+}
+
+/* ── one LP's withdrawal ─────────────────────────────────────── */
+
+export interface LpWithdrawal {
+  /** Everything that LP owns: its share of net asset value. */
+  equity: number;
+  /** Paid at once — its share of the cash actually in the contract. */
+  instant: number;
+  /** The rest, which waits for advances to mature. */
+  queued: number;
+}
+
+/**
+ * RATIO. An exiting LP is paid its share, and the cash on hand is what caps
+ * the immediate part — paying the first LP out of everyone else's money is the
+ * failure this rule exists to prevent. Both terms are snapshot fields; the only
+ * arithmetic is the share.
+ */
+export function lpWithdrawal(s: Snapshot, name: string): LpWithdrawal | null {
+  const lp = s.liquidityProviders.find((l) => l.name === name);
+  if (!lp) return null;
+  const share = lp.sharePct / 100;
+  const equity = s.pool.netAssetValue * share;
+  const instant = Math.min(equity, s.pool.cashAvailable * share);
+  return { equity, instant, queued: Math.max(0, equity - instant) };
+}
+
+/* ── one correlated-loss event, settled ──────────────────────── */
+
+export interface RecoverySettlement {
+  /** Principal that went out through the acquirer that stopped settling. */
+  principal: number;
+  /** What came back, months later. */
+  recovered: number;
+  recoveredPct: number;
+  /** Principal that never came back. */
+  finalLoss: number;
+  /** The part of it the issuer's posted collateral actually paid. */
+  collateralBorne: number;
+  /** The remainder, which the pool carries. */
+  poolBorne: number;
+  /** Over-recognised loss handed back to LP senior. */
+  lpRestored: number;
+  /** Over-recognised loss handed back to the reserve, if anything is left. */
+  reserveRestored: number;
+}
+
+/**
+ * ARRANGEMENT + SUMMING. Nothing here re-rules the event. `principal` and
+ * `recovered` are read off the event log as the chain wrote them, the final
+ * loss is their difference, the collateral share is how much of the issuer's
+ * posted collateral is gone, and the pool carries the rest. The two restored
+ * figures are how far the over-recognised loss was wound back between the two
+ * snapshots. `recoveredPct` is the single ratio, recovered over principal.
+ */
+export function recoverySettlement(
+  prev: Snapshot | null,
+  s: Snapshot,
+  issuerKey: string,
+): RecoverySettlement | null {
+  const amountOf = (name: string) => s.events.find((e) => e.name === name)?.amount ?? null;
+  const principal = amountOf('CorrelatedExposureFlagged');
+  const recovered = amountOf('RecoveryRecorded');
+  if (principal === null || recovered === null) return null;
+
+  const iss = s.issuers.find((i) => i.key === issuerKey);
+  const finalLoss = Math.max(0, principal - recovered);
+  const collateralBorne = iss ? Math.max(0, iss.collateralInitial - iss.collateralRemaining) : 0;
+
+  return {
+    principal,
+    recovered,
+    recoveredPct: principal > 0 ? (recovered / principal) * 100 : 0,
+    finalLoss,
+    collateralBorne,
+    poolBorne: Math.max(0, finalLoss - collateralBorne),
+    lpRestored: prev ? Math.max(0, prev.pool.lpLossApplied - s.pool.lpLossApplied) : 0,
+    reserveRestored: prev ? Math.max(0, prev.pool.reserveUsed - s.pool.reserveUsed) : 0,
+  };
+}
+
+/**
+ * RATIO. The ceiling one event can recognise as confirmed loss — a frozen
+ * percentage of LP deposits. Anything above it is held, not written off.
+ */
+export function singleEventCap(s: Snapshot): number {
+  return s.pool.lpDeposits * (PARAMS.singleEventCapPct / 100);
+}
+
+/* ── how wide the pool is spread ─────────────────────────────── */
+
+/** SUMMING. Registered issuers. */
+export function issuerCount(s: Snapshot): number {
+  return s.issuers.length;
+}
+
+/** SUMMING. Distinct acquirers those issuers route through. */
+export function acquirerCount(s: Snapshot): number {
+  return new Set(s.issuers.map((i) => i.acquirerHash)).size;
+}
+
+/**
+ * RATIO against frozen parameters. The limit an issuer's OWN collateral
+ * supports, after the ramp-up discount that applies in its first days. Compare
+ * it with `effectiveLimit` to see whether collateral or the pool is binding.
+ */
+export function rampedCollateralLimit(
+  issuer: { collateralRemaining: number; rampUp: boolean },
+): number {
+  const fromCollateral = issuer.collateralRemaining / (PARAMS.issuerCollateralPct / 100);
+  return issuer.rampUp ? fromCollateral * (PARAMS.rampUpPct / 100) : fromCollateral;
+}
+
+/* ── one round of LP deposit applications ────────────────────── */
+
+export interface DepositApplication {
+  /** What this LP asked to put in. */
+  requested: number;
+  /** What the contract took. */
+  accepted: number;
+  /** What it refused, as the rejection event records it. */
+  rejected: number;
+}
+
+/**
+ * ARRANGEMENT. The accepted amount is this LP's deposit in the snapshot and
+ * the refused amount is the logged `DepositRejected`; the request is their
+ * sum. Nothing here decides anything — the contract already did.
+ */
+export function depositApplication(s: Snapshot, name: string): DepositApplication | null {
+  const rejected = s.events.find((e) => e.name === 'DepositRejected' && e.target === name)?.amount;
+  if (typeof rejected !== 'number') return null;
+  const lp = s.liquidityProviders.find((l) => l.name === name);
+  const accepted = lp ? lp.deposit : 0;
+  return { requested: accepted + rejected, accepted, rejected };
+}
+
+/** SUMMING. Every deposit the contract refused in this round. */
+export function depositRejectedTotal(s: Snapshot): number {
+  return s.events
+    .filter((e) => e.name === 'DepositRejected')
+    .reduce((a, e) => a + e.amount, 0);
+}
+
+/** SUMMING. Everything applied for: what went in, plus what was refused. */
+export function depositRequestedTotal(s: Snapshot): number {
+  const accepted = s.events
+    .filter((e) => e.name === 'DepositRejected')
+    .reduce((a, e) => a + (s.liquidityProviders.find((l) => l.name === e.target)?.deposit ?? 0), 0);
+  return accepted + depositRejectedTotal(s);
+}
+
+/** RATIO against a frozen parameter. The most one LP may hold. */
+export function lpSingleCap(s: Snapshot): number {
+  return s.metrics.lpDepositCap * (PARAMS.lpSingleCapPct / 100);
+}
+
+/** SUMMING. Liquidity providers in the pool. */
+export function lpCount(s: Snapshot): number {
+  return s.liquidityProviders.length;
 }
