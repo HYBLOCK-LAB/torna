@@ -18,6 +18,13 @@ import { TIMEPOINT_ORDER } from '@shared/types/snapshot';
 import { PARAMS } from '@shared/params';
 import type { Lang } from '@shared/copy';
 import { snapshots } from './bundle';
+import {
+  lpWithdrawal, yearOne, marginAbsorbed, lpNetResult, totalValueLocked, reserveAccrued,
+  recoverySettlement, singleEventCap, acquirerConcentrationPct, newIssuerCap,
+  issuerCount, acquirerCount, rampedCollateralLimit, lpDepositRoom,
+  depositApplication, depositRejectedTotal, depositRequestedTotal,
+  lpSingleCap, lpCount,
+} from './derive';
 
 /* ── value lookup ───────────────────────────────────────────── */
 
@@ -49,10 +56,51 @@ export function valueAt(path: string, s: Snapshot): number | null {
   }
   if (head === 'issuer') {
     const iss = s.issuers.find((i) => i.key === rest[0]);
-    const v = iss ? (iss as unknown as Record<string, unknown>)[rest[1]] : undefined;
+    if (!iss) return null;
+    // One computed field, because the comparison it enables is the point of
+    // timepoint 9 — see derive.rampedCollateralLimit.
+    if (rest[1] === 'rampedCollateralLimit') return rampedCollateralLimit(iss);
+    const v = (iss as unknown as Record<string, unknown>)[rest[1]];
+    return typeof v === 'number' ? v : null;
+  }
+  if (head === 'derive') {
+    // Figures this front end computes, named so a sentence can use them.
+    // Every one of them lives in derive.ts and states which rule it follows.
+    const fns: Record<string, (x: Snapshot) => number> = {
+      marginAbsorbed, lpNet: lpNetResult, totalValueLocked, reserveAccrued, singleEventCap,
+      acquirerConcentrationPct, newIssuerCap, issuerCount, acquirerCount, lpDepositRoom,
+      depositRejectedTotal, depositRequestedTotal, lpSingleCap, lpCount,
+    };
+    const fn = fns[rest[0]];
+    return fn ? fn(s) : null;
+  }
+  if (head === 'deposit') {
+    // deposit.<LP>.<requested|accepted|rejected> — one application in a
+    // deposit round. See derive.depositApplication.
+    const d = depositApplication(s, rest[0]);
+    const v = d ? (d as unknown as Record<string, number>)[rest[1]] : undefined;
+    return typeof v === 'number' ? v : null;
+  }
+  if (head === 'recovery') {
+    // recovery.<issuerKey>.<field> — one correlated-loss event, once it has
+    // been settled. See derive.recoverySettlement.
+    const r = recoverySettlement(previousOf(s.timepointId), s, rest[0]);
+    const v = r ? (r as unknown as Record<string, number>)[rest[1]] : undefined;
+    return typeof v === 'number' ? v : null;
+  }
+  if (head === 'year') {
+    // The fixed year before the demo — see derive.yearOne.
+    const y = yearOne(snapshots.t0, snapshots.t1) as unknown as Record<string, number>;
+    const v = y[rest[0]];
     return typeof v === 'number' ? v : null;
   }
   if (head === 'lp') {
+    // equity / instant / queued are not stored — they are this LP's share of
+    // figures that are. See derive.lpWithdrawal.
+    if (rest[1] === 'equity' || rest[1] === 'instant' || rest[1] === 'queued') {
+      const w = lpWithdrawal(s, rest[0]);
+      return w ? w[rest[1]] : null;
+    }
     const lp = s.liquidityProviders.find((l) => l.name === rest[0]);
     const v = lp ? (lp as unknown as Record<string, unknown>)[rest[1]] : undefined;
     return typeof v === 'number' ? v : null;
@@ -72,7 +120,7 @@ const fmt = (v: number, mode?: string) =>
 
 /* ── text rendering ─────────────────────────────────────────── */
 
-const TOKEN = /\{([a-zA-Z0-9_.\-]+)(?::(delta|pct|n2))?\}/g;
+const TOKEN = /\{([a-zA-Z0-9_.\-]+)(?::(delta|pctdelta|pct|n2|prev))?\}/g;
 
 /**
  * `en` is still being written. Until it lands, show `ko` rather than a blank
@@ -99,19 +147,24 @@ export function Narrative({
     last = at + m[0].length;
 
     const [, path, mode] = m;
-    const now = valueAt(path, s);
+    const now = mode === 'prev'
+      ? (prev ? valueAt(path, prev) : null)
+      : valueAt(path, s);
 
     if (now === null) {
       // Loud on purpose: a silently dropped figure is how a demo starts lying.
       out.push(<b key={at} className="narr-miss">⟨{path}⟩</b>);
       continue;
     }
-    if (mode === 'delta') {
+    if (mode === 'delta' || mode === 'pctdelta') {
+      // `pctdelta` is `delta` for a figure that has to keep its % sign on both
+      // sides — "100% → 33.33%" rather than a bare "100 → 33.33".
+      const unit = mode === 'pctdelta' ? 'pct' : undefined;
       const before = prev ? valueAt(path, prev) : null;
       out.push(
         before === null || Math.abs(before - now) < 0.005
-          ? <Fragment key={at}>{fmt(now)}</Fragment>
-          : <Fragment key={at}>{fmt(before)} <span className="ar">→</span> {fmt(now)}</Fragment>,
+          ? <Fragment key={at}>{fmt(now, unit)}</Fragment>
+          : <Fragment key={at}>{fmt(before, unit)} <span className="ar">→</span> {fmt(now, unit)}</Fragment>,
       );
       continue;
     }
