@@ -39,6 +39,8 @@ export const PARAMS = {
   reserveSeed: 500,
   /** Average advance term, in days. */
   avgTermDays: 5,
+  /** Loss rate at which fee income exactly covers losses. */
+  breakEvenPct: 0.35,
 } as const;
 
 export type ParamKey = keyof typeof PARAMS;

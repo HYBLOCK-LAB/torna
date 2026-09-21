@@ -59,8 +59,17 @@
       "file": "t4.json"
     },
     {
-      "timepointId": "t5",
+      "timepointId": "t4b",
       "seq": 6,
+      "label": {
+        "ko": "LP 출금 · 유동성 · 후속",
+        "en": "LP withdrawal and liquidity · follow-up"
+      },
+      "file": "t4b.json"
+    },
+    {
+      "timepointId": "t5",
+      "seq": 7,
       "label": {
         "ko": "지연 후 정상 상환",
         "en": "Delayed but repaid"
@@ -69,7 +78,7 @@
     },
     {
       "timepointId": "t6",
-      "seq": 7,
+      "seq": 8,
       "label": {
         "ko": "외부 운용처 동결",
         "en": "External venue frozen"
@@ -78,7 +87,7 @@
     },
     {
       "timepointId": "t7",
-      "seq": 8,
+      "seq": 9,
       "label": {
         "ko": "체인 성공 · DB 실패",
         "en": "Chain succeeded, ledger failed"
@@ -87,7 +96,7 @@
     },
     {
       "timepointId": "t8",
-      "seq": 9,
+      "seq": 10,
       "label": {
         "ko": "부정 요청 거절",
         "en": "Invalid requests rejected"
@@ -96,7 +105,7 @@
     },
     {
       "timepointId": "t9",
-      "seq": 10,
+      "seq": 11,
       "label": {
         "ko": "발급사가 늘어날 때",
         "en": "More issuers join"
@@ -105,7 +114,7 @@
     },
     {
       "timepointId": "t9b",
-      "seq": 11,
+      "seq": 12,
       "label": {
         "ko": "자본이 몰려올 때",
         "en": "Capital arrives"

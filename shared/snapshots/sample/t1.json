@@ -93,7 +93,12 @@
       "state": "Review",
       "evidence": "Upstream settlement agent non-receipt confirmation",
       "txHash": "0x7f4c64626653e86ddbfa46d6e896fabbc657a851c3f4f325ae860b387ce8c942",
-      "createdAtTimepoint": 1
+      "createdAtTimepoint": 1,
+      "history": [
+        "Advanced",
+        "Overdue",
+        "Review"
+      ]
     }
   ],
   "metrics": {
