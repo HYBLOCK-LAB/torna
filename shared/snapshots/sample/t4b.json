@@ -1,25 +1,25 @@
 {
   "schemaVersion": 1,
   "runId": "sample",
-  "timepointId": "t4",
-  "seq": 5,
+  "timepointId": "t4b",
+  "seq": 6,
   "label": {
-    "ko": "LP 출금 · 유동성",
-    "en": "LP withdrawal and liquidity"
+    "ko": "LP 출금 · 유동성 · 후속",
+    "en": "LP withdrawal and liquidity · follow-up"
   },
   "chainId": 10143,
   "contract": "0x0000000000000000000000000000000000000000",
-  "blockNumber": 1284424,
+  "blockNumber": 1284427,
   "capturedAt": "2026-09-19T00:00:00Z",
   "amountUnit": "USDC",
   "note": "온체인은 6자리 정수. 스냅샷은 USDC 단위 숫자로 변환해 기록한다.",
   "pool": {
-    "lpDeposits": 10000,
-    "lpFeeAccrued": 897.6,
-    "lpLossApplied": 1352,
-    "netAssetValue": 9545.6,
-    "advancedOutstanding": 4000,
-    "cashAvailable": 5545.6,
+    "lpDeposits": 8000,
+    "lpFeeAccrued": 718.08,
+    "lpLossApplied": 1081.6,
+    "netAssetValue": 7636.48,
+    "advancedOutstanding": 1000,
+    "cashAvailable": 6636.48,
     "reserve": 1.6,
     "reserveUsed": 648,
     "capHeld": 0,
@@ -34,8 +34,8 @@
       "acquirerHash": "0xea2b5fc87a034a1947b3a920f51605b48a88116bdd6d455d1b25f904d81ee917",
       "collateralInitial": 3000,
       "collateralRemaining": 2800,
-      "outstanding": 4000,
-      "effectiveLimit": 4772.8,
+      "outstanding": 1000,
+      "effectiveLimit": 3818.24,
       "rampUp": false,
       "state": "Active"
     },
@@ -55,17 +55,12 @@
     {
       "name": "LP-01",
       "deposit": 5000,
-      "sharePct": 50
+      "sharePct": 62.5
     },
     {
       "name": "LP-02",
       "deposit": 3000,
-      "sharePct": 30
-    },
-    {
-      "name": "LP-03",
-      "deposit": 2000,
-      "sharePct": 20
+      "sharePct": 37.5
     }
   ],
   "positions": [
@@ -189,7 +184,7 @@
       "fee": 3,
       "issuerMargin": 200,
       "poolCoverage": 800,
-      "state": "Advanced",
+      "state": "Repaid",
       "evidence": null,
       "txHash": "0x797289e8c61d9c202833306cd7e41a77cefcebb01f2eaeead072b2606ffb1dd6",
       "createdAtTimepoint": 4
@@ -202,7 +197,7 @@
       "fee": 3,
       "issuerMargin": 200,
       "poolCoverage": 800,
-      "state": "Advanced",
+      "state": "Repaid",
       "evidence": null,
       "txHash": "0x5e417a457364187545b8a4c4edd2426af5cede770f2c9c06266e9a9f378c345f",
       "createdAtTimepoint": 4
@@ -215,7 +210,7 @@
       "fee": 3,
       "issuerMargin": 200,
       "poolCoverage": 800,
-      "state": "Advanced",
+      "state": "Repaid",
       "evidence": null,
       "txHash": "0x10eae4e29159c72e7e7b27a716c6ca1f7deeb2089347e6397fb92767f76bdc49",
       "createdAtTimepoint": 4
@@ -237,16 +232,40 @@
   "metrics": {
     "cumulativeCount": 374,
     "cumulativeAdvanced": 374000,
-    "lossTotal": 2800,
-    "lossRatePct": 0.75,
-    "repayRatePct": 98.65,
-    "utilizationPct": 41.9,
-    "acquirerTopExposure": 4000,
-    "acquirerExposureLimit": 4772.8,
+    "lossTotal": 2529.6,
+    "lossRatePct": 0.68,
+    "repayRatePct": 98.66,
+    "utilizationPct": 13.1,
+    "acquirerTopExposure": 1000,
+    "acquirerExposureLimit": 3818.24,
     "lpDepositCap": 16667,
     "rejectedRequests": 0
   },
   "events": [
+    {
+      "blockNumber": 1284427,
+      "name": "WithdrawCompleted",
+      "target": "LP-03",
+      "amount": 800,
+      "txHash": "0xade39999999999999999999999999999999999999999999999999999999998f",
+      "timepointSeq": 4
+    },
+    {
+      "blockNumber": 1284426,
+      "name": "AdvanceRepaid",
+      "target": "batch-3",
+      "amount": 3000,
+      "txHash": "0x940688888888888888888888888888888888888888888888888888888888804",
+      "timepointSeq": 4
+    },
+    {
+      "blockNumber": 1284424,
+      "name": "WithdrawPaid",
+      "target": "LP-03",
+      "amount": 1109,
+      "txHash": "0x81e742bfba0c278858d61eef5f7a1b8709e921f6d70fd102147b5db0d4b216bf",
+      "timepointSeq": 4
+    },
     {
       "blockNumber": 1284423,
       "name": "WithdrawRequested",
@@ -381,22 +400,6 @@
       "target": "REF-2026-001",
       "amount": 1000,
       "txHash": "0x40298a0e82475f78f642a9b76bf63dd648319d28e2aea9025f4f66442ae677b9",
-      "timepointSeq": 0
-    },
-    {
-      "blockNumber": 1284393,
-      "name": "AdvanceIssued",
-      "target": "REF-2026-001",
-      "amount": 1000,
-      "txHash": "0xf4b183fdc1310b7ed642001287883420e25807a57c109cacd5838c4b7153b622",
-      "timepointSeq": 0
-    },
-    {
-      "blockNumber": 1284392,
-      "name": "RefundConfirmed",
-      "target": "REF-2026-001",
-      "amount": 1000,
-      "txHash": "0x7d6ad5120813a704605c1dcc7a4f9507870d73da19db0d57d6555d8f108efd98",
       "timepointSeq": 0
     }
   ]

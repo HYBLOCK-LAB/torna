@@ -91,9 +91,15 @@
       "issuerMargin": 200,
       "poolCoverage": 800,
       "state": "CoveredLoss",
-      "evidence": "상류 정산기관 미수취 확인서",
+      "evidence": "Upstream settlement agent non-receipt confirmation",
       "txHash": "0x7f4c64626653e86ddbfa46d6e896fabbc657a851c3f4f325ae860b387ce8c942",
-      "createdAtTimepoint": 1
+      "createdAtTimepoint": 1,
+      "history": [
+        "Advanced",
+        "Overdue",
+        "Review",
+        "CoveredLoss"
+      ]
     },
     {
       "refundKey": "0xf81d3e00e2f0f69279de7ca4b08c2e9ecc938adc61a6a1c2abec1ea8bdfe6376",
@@ -104,9 +110,16 @@
       "issuerMargin": 200,
       "poolCoverage": 800,
       "state": "RecoveryRecorded",
-      "evidence": "매입사 β 정산 중단",
+      "evidence": "Acquirer β stopped settling",
       "txHash": "0x27dedfbd20acb5fa1ff161431a39a1d2631115d416f4d60d2cea2cd1664379be",
-      "createdAtTimepoint": 3
+      "createdAtTimepoint": 3,
+      "history": [
+        "Advanced",
+        "Overdue",
+        "Review",
+        "CapHeld",
+        "RecoveryRecorded"
+      ]
     },
     {
       "refundKey": "0x10172677b37dd6a84362e29b985702b85c8ffc0291ce9846f35372a4a19f05ad",
@@ -117,9 +130,16 @@
       "issuerMargin": 200,
       "poolCoverage": 800,
       "state": "RecoveryRecorded",
-      "evidence": "매입사 β 정산 중단",
+      "evidence": "Acquirer β stopped settling",
       "txHash": "0x649bea7a2d31b9af3ed84a9f236e07df22bf57bf57bcc24770e712738d847c43",
-      "createdAtTimepoint": 3
+      "createdAtTimepoint": 3,
+      "history": [
+        "Advanced",
+        "Overdue",
+        "Review",
+        "CapHeld",
+        "RecoveryRecorded"
+      ]
     },
     {
       "refundKey": "0xb87b46d8d839bf7fd568bd9c8b160c6159805b399e1f250c25ab7d81cafec803",
@@ -130,9 +150,16 @@
       "issuerMargin": 200,
       "poolCoverage": 800,
       "state": "RecoveryRecorded",
-      "evidence": "매입사 β 정산 중단",
+      "evidence": "Acquirer β stopped settling",
       "txHash": "0x0cb4439d624f6b6f48e8b6411d98fb63b692f96eac3689757686f236fbab9677",
-      "createdAtTimepoint": 3
+      "createdAtTimepoint": 3,
+      "history": [
+        "Advanced",
+        "Overdue",
+        "Review",
+        "CapHeld",
+        "RecoveryRecorded"
+      ]
     },
     {
       "refundKey": "0x2fde037b48def78bc2467363ae203dff036dc54638949bd7cefe3ad49cf14948",
@@ -143,9 +170,16 @@
       "issuerMargin": 200,
       "poolCoverage": 800,
       "state": "RecoveryRecorded",
-      "evidence": "매입사 β 정산 중단",
+      "evidence": "Acquirer β stopped settling",
       "txHash": "0x98639676b7b8e49ef5f6c9359caf0ac594fbb2f9d0e811103cdc32de0a7c4f98",
-      "createdAtTimepoint": 3
+      "createdAtTimepoint": 3,
+      "history": [
+        "Advanced",
+        "Overdue",
+        "Review",
+        "CapHeld",
+        "RecoveryRecorded"
+      ]
     }
   ],
   "metrics": {
@@ -166,98 +200,112 @@
       "name": "RecoveryRecorded",
       "target": "acquirer-β",
       "amount": 2200,
-      "txHash": "0x1c001a190ff25b11ccb43e67996fc2a79ff27a3246e8a0bc198d09ef11cf12dc"
+      "txHash": "0x1c001a190ff25b11ccb43e67996fc2a79ff27a3246e8a0bc198d09ef11cf12dc",
+      "timepointSeq": 3
     },
     {
       "blockNumber": 1284414,
       "name": "IssuerMarginCall",
       "target": "AURA",
       "amount": 0,
-      "txHash": "0x432f3c7ab4bd96ce296bd147b31c53dae212e60e8a59cdeaf68501769ea984f6"
+      "txHash": "0x5a907cd418a585acda9dbd0ed158f1e3e4cec174ee5aeb933dd40897bf014677",
+      "timepointSeq": 3
     },
     {
       "blockNumber": 1284413,
       "name": "LossCapTriggered",
       "target": "acquirer-β",
       "amount": 2000,
-      "txHash": "0x216d5c92afe66f58dc526bf167932e65fc52cb737cb387fbbd11b7415d289521"
+      "txHash": "0x114d06391a3ecda2e4fe3b180b358e90be6147650c43b2e8d36e615d7259b189",
+      "timepointSeq": 3
     },
     {
       "blockNumber": 1284411,
       "name": "CorrelatedExposureFlagged",
       "target": "acquirer-β",
       "amount": 4000,
-      "txHash": "0xb69d0e14c3b584be964c0fba50ea5496f2c4812461c8b8ec7ddd5b3f1edc83e2"
+      "txHash": "0x5efab5f061ee87f527725f7c415688e0a2ef4ed1cd507bc19ea95811a9bf68c7",
+      "timepointSeq": 3
     },
     {
       "blockNumber": 1284408,
       "name": "AdvanceIssued",
       "target": "REF-2026-034",
       "amount": 1000,
-      "txHash": "0xe685f5a6a62515447402cad79e45154c62d66b260a7df450385a579d330c644a"
+      "txHash": "0x4c20b363bbcd7a252e865b301f042fc6f811933efad84a0a97113bd17cf62212",
+      "timepointSeq": 3
     },
     {
       "blockNumber": 1284405,
       "name": "AdvanceIssued",
       "target": "REF-2026-033",
       "amount": 1000,
-      "txHash": "0xf61fa3411a5e73421ef1e37a053ef6e9fe12db9eab0694d3b9717f24ba0ed9a0"
+      "txHash": "0x1465ec2d24a6f91c342edf9ef8aaa3b044abe55ef6c09aa55329b313b6749cf2",
+      "timepointSeq": 3
     },
     {
       "blockNumber": 1284403,
       "name": "AdvanceIssued",
       "target": "REF-2026-032",
       "amount": 1000,
-      "txHash": "0x2b314a94ee31832c5cfe11a377ad003d6552e2671afad30f9b3cdfdb1cb6299d"
+      "txHash": "0x847331c91f597b69ea08a8cca1f68ebc38db9520a72cc3371055b1ff92df427c",
+      "timepointSeq": 3
     },
     {
       "blockNumber": 1284400,
       "name": "AdvanceIssued",
       "target": "REF-2026-031",
       "amount": 1000,
-      "txHash": "0x92bcf216685c4c30c8d71bd348111026c460a1930cbc7bf3417fc8f40bd2f5f1"
+      "txHash": "0xddf270acac078b7df2bc1eb7574606dc5fe8396ce2cecf65b726cb3d7590a2a3",
+      "timepointSeq": 3
     },
     {
       "blockNumber": 1284399,
       "name": "CoveredLossFinalized",
       "target": "REF-2026-021",
       "amount": 800,
-      "txHash": "0x3fa049b09800fc7fdf791d87ba9ae2965ff64315c0949286ab7efffb2cd3a951"
+      "txHash": "0x63ba557bb194de8ba851d19d23c357f04564e7a29323feaaf324024e9b922a04",
+      "timepointSeq": 2
     },
     {
       "blockNumber": 1284398,
       "name": "ReviewOpened",
       "target": "REF-2026-021",
       "amount": 1000,
-      "txHash": "0x511f7f95c3473337da88f418688ea97ac6bdcdeeaa3e3568ca4d134dfe1a52a4"
+      "txHash": "0x58abe89b8827af54ee5573c4b1e6ed4325a674a7802bd0ae54c54bf9c37de779",
+      "timepointSeq": 1
     },
     {
       "blockNumber": 1284397,
       "name": "YearlySummaryLoaded",
       "target": "protocol",
       "amount": 365000,
-      "txHash": "0x5260cff38af9bdf2f3f5fbba5766440e87425b15fe1b798c9451b9b5f2892c43"
+      "txHash": "0xb23da8858f72c0ef77e4c1556dfe4272e56ec744a943d08188d1669e5753201d",
+      "timepointSeq": 1
     },
     {
       "blockNumber": 1284396,
       "name": "AdvanceRepaid",
       "target": "REF-2026-001",
       "amount": 1000,
-      "txHash": "0x8201ddd93037b75dfea93465f0c6b007006046801096559dd6ef1357571de912"
+      "txHash": "0x40298a0e82475f78f642a9b76bf63dd648319d28e2aea9025f4f66442ae677b9",
+      "timepointSeq": 0
     },
     {
       "blockNumber": 1284393,
       "name": "AdvanceIssued",
       "target": "REF-2026-001",
       "amount": 1000,
-      "txHash": "0xa5822761defe942439d555e743a59e05edab4f8aaffa0ce2e21a76f20c54afd3"
+      "txHash": "0xf4b183fdc1310b7ed642001287883420e25807a57c109cacd5838c4b7153b622",
+      "timepointSeq": 0
     },
     {
       "blockNumber": 1284392,
       "name": "RefundConfirmed",
       "target": "REF-2026-001",
       "amount": 1000,
-      "txHash": "0x1de946aeba0d25afb934a5f9f2e163d8ac31e0a817de57827536d1c4e10dbf0a"
+      "txHash": "0x7d6ad5120813a704605c1dcc7a4f9507870d73da19db0d57d6555d8f108efd98",
+      "timepointSeq": 0
     }
   ]
 }

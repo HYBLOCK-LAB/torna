@@ -14,10 +14,11 @@
 
 export type TimepointId =
   | 't0' | 't1' | 't2' | 't3' | 't3b' | 't4'
+  | 't4b'
   | 't5' | 't6' | 't7' | 't8' | 't9' | 't9b';
 
 export const TIMEPOINT_ORDER: readonly TimepointId[] = [
-  't0', 't1', 't2', 't3', 't3b', 't4', 't5', 't6', 't7', 't8', 't9', 't9b',
+  't0', 't1', 't2', 't3', 't3b', 't4', 't4b', 't5', 't6', 't7', 't8', 't9', 't9b',
 ] as const;
 
 /** Position lifecycle. Spelling must match the contract enum and the DB column. */
@@ -107,6 +108,14 @@ export interface PositionSnapshot {
   txHash: string;
   /** Sequence index of the timepoint that created this position. */
   createdAtTimepoint: number;
+  /**
+   * The states this position has actually passed through, in order, ending at
+   * `state`. Optional: only worth carrying where the path is not obvious from
+   * the current state — a position that went Advanced → Overdue → Review →
+   * Repaid reads very differently from one that was simply repaid on time.
+   * A dump that cannot produce it omits it and the row renders without a path.
+   */
+  history?: PositionState[];
 }
 
 export interface Metrics {
@@ -128,6 +137,12 @@ export interface EventLogEntry {
   target: string;
   amount: number;
   txHash: string;
+  /**
+   * Sequence index of the timepoint that emitted this event. Optional: the
+   * chain does not carry it, so a dump that cannot resolve it simply omits it
+   * and the row renders without a scenario tag.
+   */
+  timepointSeq?: number;
 }
 
 export interface Snapshot {

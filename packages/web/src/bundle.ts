@@ -86,6 +86,11 @@ export function acquirerLabel(acquirerHash: string): string {
   return labels?.acquirers?.[acquirerHash]?.displayName ?? short(acquirerHash);
 }
 
+/** ACQ-α — for tiles and table cells, where the display name does not fit. */
+export function acquirerId(acquirerHash: string): string {
+  return labels?.acquirers?.[acquirerHash]?.acquirerId ?? short(acquirerHash);
+}
+
 export function issuerRegion(issuerKey: string): string {
   return labels?.issuers?.[issuerKey]?.region ?? '';
 }

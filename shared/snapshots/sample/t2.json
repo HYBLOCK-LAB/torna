@@ -91,9 +91,15 @@
       "issuerMargin": 200,
       "poolCoverage": 800,
       "state": "CoveredLoss",
-      "evidence": "상류 정산기관 미수취 확인서",
+      "evidence": "Upstream settlement agent non-receipt confirmation",
       "txHash": "0x7f4c64626653e86ddbfa46d6e896fabbc657a851c3f4f325ae860b387ce8c942",
-      "createdAtTimepoint": 1
+      "createdAtTimepoint": 1,
+      "history": [
+        "Advanced",
+        "Overdue",
+        "Review",
+        "CoveredLoss"
+      ]
     }
   ],
   "metrics": {
@@ -114,42 +120,48 @@
       "name": "CoveredLossFinalized",
       "target": "REF-2026-021",
       "amount": 800,
-      "txHash": "0x63ba557bb194de8ba851d19d23c357f04564e7a29323feaaf324024e9b922a04"
+      "txHash": "0x63ba557bb194de8ba851d19d23c357f04564e7a29323feaaf324024e9b922a04",
+      "timepointSeq": 2
     },
     {
       "blockNumber": 1284398,
       "name": "ReviewOpened",
       "target": "REF-2026-021",
       "amount": 1000,
-      "txHash": "0x13a7ffef7c9ff2104dcd4008ec1255463b18e549227b275f0e1e7f814fe1e687"
+      "txHash": "0x58abe89b8827af54ee5573c4b1e6ed4325a674a7802bd0ae54c54bf9c37de779",
+      "timepointSeq": 1
     },
     {
       "blockNumber": 1284397,
       "name": "YearlySummaryLoaded",
       "target": "protocol",
       "amount": 365000,
-      "txHash": "0x6fd0f5cded62e84e2fff8bc88d7cafa8f017a547f77db8c9ae1b982467def9c8"
+      "txHash": "0xb23da8858f72c0ef77e4c1556dfe4272e56ec744a943d08188d1669e5753201d",
+      "timepointSeq": 1
     },
     {
       "blockNumber": 1284396,
       "name": "AdvanceRepaid",
       "target": "REF-2026-001",
       "amount": 1000,
-      "txHash": "0xcbcdfdb3a072cdc3d489215b09c760769e8200e060a7379da7f5f1fbea1590da"
+      "txHash": "0x40298a0e82475f78f642a9b76bf63dd648319d28e2aea9025f4f66442ae677b9",
+      "timepointSeq": 0
     },
     {
       "blockNumber": 1284393,
       "name": "AdvanceIssued",
       "target": "REF-2026-001",
       "amount": 1000,
-      "txHash": "0xb2dc8f91a4cca63aec3235b26f87aad5037f648f61500bd25d0928982a6ff602"
+      "txHash": "0xf4b183fdc1310b7ed642001287883420e25807a57c109cacd5838c4b7153b622",
+      "timepointSeq": 0
     },
     {
       "blockNumber": 1284392,
       "name": "RefundConfirmed",
       "target": "REF-2026-001",
       "amount": 1000,
-      "txHash": "0x25809eb9679316d80692a8d2ab6c318d4f282db00fc97c8b8d530f593d84d020"
+      "txHash": "0x7d6ad5120813a704605c1dcc7a4f9507870d73da19db0d57d6555d8f108efd98",
+      "timepointSeq": 0
     }
   ]
 }
