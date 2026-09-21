@@ -12,7 +12,7 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join, resolve, basename, dirname } from 'node:path';
 
 const ORDER = [
-  't0', 't1', 't2', 't3', 't3b', 't4', 't5', 't6', 't7', 't8', 't9', 't9b',
+  't0', 't1', 't2', 't3', 't3b', 't4', 't4b', 't5', 't6', 't7', 't8', 't9', 't9b',
 ] as const;
 
 type TimepointId = (typeof ORDER)[number];
@@ -33,6 +33,7 @@ const BASELINE: Record<TimepointId, {
   t3:  { nav: 9136,  outstanding: 2000, reserve: 0,   lpLoss: 1752, capHeld: 1600, external: 0,    count: 370, advanced: 370000 },
   t3b: { nav: 9536,  outstanding: 0,    reserve: 0,   lpLoss: 1352, capHeld: 0,    external: 0,    count: 370, advanced: 370000 },
   t4:  { nav: 9546,  outstanding: 4000, reserve: 2,   lpLoss: 1352, capHeld: 0,    external: 0,    count: 374, advanced: 374000 },
+  t4b: { nav: 7636,  outstanding: 1000, reserve: 2,   lpLoss: 1082, capHeld: 0,    external: 0,    count: 374, advanced: 374000 },
   t5:  { nav: 7639,  outstanding: 1000, reserve: 2,   lpLoss: 1082, capHeld: 0,    external: 0,    count: 375, advanced: 375000 },
   t6:  { nav: 7639,  outstanding: 1000, reserve: 2,   lpLoss: 1082, capHeld: 0,    external: 3637, count: 375, advanced: 375000 },
   t7:  { nav: 7639,  outstanding: 1000, reserve: 2,   lpLoss: 1082, capHeld: 0,    external: 3637, count: 375, advanced: 375000 },

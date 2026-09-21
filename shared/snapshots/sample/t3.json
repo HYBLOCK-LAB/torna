@@ -93,7 +93,13 @@
       "state": "CoveredLoss",
       "evidence": "Upstream settlement agent non-receipt confirmation",
       "txHash": "0x7f4c64626653e86ddbfa46d6e896fabbc657a851c3f4f325ae860b387ce8c942",
-      "createdAtTimepoint": 1
+      "createdAtTimepoint": 1,
+      "history": [
+        "Advanced",
+        "Overdue",
+        "Review",
+        "CoveredLoss"
+      ]
     },
     {
       "refundKey": "0xf81d3e00e2f0f69279de7ca4b08c2e9ecc938adc61a6a1c2abec1ea8bdfe6376",
@@ -132,7 +138,13 @@
       "state": "CapHeld",
       "evidence": "Acquirer β stopped settling",
       "txHash": "0x0cb4439d624f6b6f48e8b6411d98fb63b692f96eac3689757686f236fbab9677",
-      "createdAtTimepoint": 3
+      "createdAtTimepoint": 3,
+      "history": [
+        "Advanced",
+        "Overdue",
+        "Review",
+        "CapHeld"
+      ]
     },
     {
       "refundKey": "0x2fde037b48def78bc2467363ae203dff036dc54638949bd7cefe3ad49cf14948",
@@ -145,7 +157,13 @@
       "state": "CapHeld",
       "evidence": "Acquirer β stopped settling",
       "txHash": "0x98639676b7b8e49ef5f6c9359caf0ac594fbb2f9d0e811103cdc32de0a7c4f98",
-      "createdAtTimepoint": 3
+      "createdAtTimepoint": 3,
+      "history": [
+        "Advanced",
+        "Overdue",
+        "Review",
+        "CapHeld"
+      ]
     }
   ],
   "metrics": {
