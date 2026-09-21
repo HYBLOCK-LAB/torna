@@ -91,7 +91,7 @@
       "issuerMargin": 200,
       "poolCoverage": 800,
       "state": "Review",
-      "evidence": "상류 정산기관 미수취 확인서",
+      "evidence": "Upstream settlement agent non-receipt confirmation",
       "txHash": "0x7f4c64626653e86ddbfa46d6e896fabbc657a851c3f4f325ae860b387ce8c942",
       "createdAtTimepoint": 1
     }
@@ -114,35 +114,40 @@
       "name": "ReviewOpened",
       "target": "REF-2026-021",
       "amount": 1000,
-      "txHash": "0x58abe89b8827af54ee5573c4b1e6ed4325a674a7802bd0ae54c54bf9c37de779"
+      "txHash": "0x58abe89b8827af54ee5573c4b1e6ed4325a674a7802bd0ae54c54bf9c37de779",
+      "timepointSeq": 1
     },
     {
       "blockNumber": 1284397,
       "name": "YearlySummaryLoaded",
       "target": "protocol",
       "amount": 365000,
-      "txHash": "0xb23da8858f72c0ef77e4c1556dfe4272e56ec744a943d08188d1669e5753201d"
+      "txHash": "0xb23da8858f72c0ef77e4c1556dfe4272e56ec744a943d08188d1669e5753201d",
+      "timepointSeq": 1
     },
     {
       "blockNumber": 1284396,
       "name": "AdvanceRepaid",
       "target": "REF-2026-001",
       "amount": 1000,
-      "txHash": "0x4b923015ff697169e9dec3d7500fb842028e8fbc1704accf13f093e2bba452e7"
+      "txHash": "0x40298a0e82475f78f642a9b76bf63dd648319d28e2aea9025f4f66442ae677b9",
+      "timepointSeq": 0
     },
     {
       "blockNumber": 1284393,
       "name": "AdvanceIssued",
       "target": "REF-2026-001",
       "amount": 1000,
-      "txHash": "0x0cbefb6d2dd7101414898548bfb19b3f2a85e36d5cdeafdc79c06fe7a316655c"
+      "txHash": "0xf4b183fdc1310b7ed642001287883420e25807a57c109cacd5838c4b7153b622",
+      "timepointSeq": 0
     },
     {
       "blockNumber": 1284392,
       "name": "RefundConfirmed",
       "target": "REF-2026-001",
       "amount": 1000,
-      "txHash": "0x623606df1bda07b282fe27aa31c0ff6386ccb71474fdb5d0908c950bd9f491b5"
+      "txHash": "0x7d6ad5120813a704605c1dcc7a4f9507870d73da19db0d57d6555d8f108efd98",
+      "timepointSeq": 0
     }
   ]
 }
