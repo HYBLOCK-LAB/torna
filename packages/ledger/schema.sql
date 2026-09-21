@@ -53,7 +53,7 @@ create table public.issuers (
 -- ---------------------------------------------------------------------------
 create table public.cardholders (
   id            bigint generated always as identity primary key,
-  issuer_key    text not null references public.issuers (key),
+  issuer_id     text not null references public.issuers (key),
   display_name  text not null,
   balance       numeric(14, 2) not null default 0 check (balance >= 0),
   created_at    timestamptz not null default now()
@@ -83,7 +83,7 @@ create table public.refunds (
   refund_id       text primary key,               -- 'REF-2026-001'
   refund_key      text unique
                   check (refund_key ~ '^0x[0-9a-f]{64}$'),  -- keccak256(refund_id)
-  issuer_key      text not null references public.issuers (key),
+  issuer_id       text not null references public.issuers (key),
   acquirer_id     text not null references public.acquirers (acquirer_id),
   cardholder_id   bigint references public.cardholders (id),
   cancel_tx_id    bigint references public.transactions (id),
@@ -106,7 +106,7 @@ create table public.refunds (
   created_at      timestamptz not null default now()
 );
 
-create index refunds_issuer_idx    on public.refunds (issuer_key);
+create index refunds_issuer_idx    on public.refunds (issuer_id);
 create index refunds_timepoint_idx on public.refunds (timepoint);
 
 -- ---------------------------------------------------------------------------
