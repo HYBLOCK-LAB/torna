@@ -11,7 +11,8 @@
   "scripts": {
     "verify:bundle": "tsx scripts/verify-bundle.ts",
     "dev": "pnpm --filter @torna/web dev",
-    "build": "pnpm --filter @torna/web build"
+    "build": "pnpm --filter @torna/web build",
+    "verify:narrative": "tsx scripts/verify-narrative.ts"
   },
   "devDependencies": {
     "tsx": "^4.19.2",

@@ -28,6 +28,8 @@ export const COPY = {
                       ko: '확정된 환불금을 공동 풀이 카드사에 선지급해 구매력을 즉시 복원합니다.' },
   'app.mockNotice': { en: 'Design mockup. Figures are demo assumptions, not real transactions.',
                       ko: '설계용 목업. 수치는 데모 가정이며 실제 거래가 아닙니다.' },
+  'app.langEn':     { en: 'EN', ko: 'EN' },
+  'app.langKo':     { en: '한',  ko: '한' },
 
   // ── Screens ─────────────────────────────────────────────
   'screen.user':    { en: 'Cardholder app',  ko: '사용자 앱' },
@@ -48,7 +50,6 @@ export const COPY = {
   'nav.soFar':         { en: 'Up to here',        ko: '여기까지의 경과' },
   'nav.confirm':       { en: 'Check it →',        ko: '확인하기 →' },
   'nav.reviewed':      { en: '✓ Review again',    ko: '✓ 다시 보기' },
-  'nav.noChange':      { en: 'No change',         ko: '변화 없음' },
   'nav.viewing':      { en: 'Viewing now',        ko: '보는 중' },
   'nav.done':         { en: 'Viewed',             ko: '확인 완료' },
   'nav.timepoints':   { en: 'Timepoints',        ko: '시점' },
@@ -56,17 +57,10 @@ export const COPY = {
   'nav.rewind':        { en: '↺ Rewind to this point', ko: '↺ 이 시점으로 되돌리기' },
 
   // ── Cardholder experience (never say "timepoint" here) ──
-  'user.replay':       { en: '↺ Replay the refund experience', ko: '↺ 환불 체험 다시 보기' },
-  'user.autoplay':     { en: '▶ Play the whole flow',          ko: '▶ 전체 자동 재생' },
-  'user.back':         { en: '← Go back',                      ko: '← 돌아가기' },
   'user.backNote':     { en: 'This is the cardholder app, and it replays on its own. The operating screens are still where you left them, at {id}.',
                          ko: '사용자 앱 화면입니다. 체험은 이 화면에서 다시 돌려볼 수 있고, 운영 화면은 {id}까지 진행한 상태 그대로 있습니다.' },
   'user.backToOps':    { en: '← Back · the screens as they stand at {id}',
                          ko: '← 돌아가기 · {id}까지 진행한 화면' },
-  'user.replayOffer':  { en: 'This screen is the cardholder app as it stands after {id}. You can replay the refund run from the beginning and come straight back to {id}.',
-                         ko: '이 화면은 {id}까지 진행된 상태의 사용자 앱입니다. 환불 체험을 처음부터 다시 보고 {id}으로 그대로 돌아올 수 있습니다.' },
-  'user.replayNotice': { en: 'You are replaying the refund experience. The operations screens show the same early state. Going back restores everything, including what you have already reviewed.',
-                         ko: '환불 체험을 다시 보는 중입니다. 지금은 운영 화면도 체험 직후 상태를 함께 보여줍니다. 돌아가면 수치와 확인 기록까지 그대로 복원됩니다.' },
   'user.sameTx':       { en: 'The same transaction is shown again — one refund is only ever credited once.',
                          ko: '같은 트랜잭션이 다시 표시됩니다 — 같은 환불 건은 한 번만 반영됩니다.' },
 
@@ -100,7 +94,7 @@ export const COPY = {
   'metric.effectiveLimit': { en: 'Effective limit',  ko: '유효 한도' },
   'metric.utilization':  { en: 'Utilization',        ko: '가동률' },
   'metric.lossRate':     { en: 'Loss rate',          ko: '손실률' },
-  'metric.breakeven':    { en: 'Break-even 0.35%',   ko: '손익분기 0.35%' },
+  'metric.breakeven':    { en: 'Break-even {param.breakEvenPct}%', ko: '손익분기 {param.breakEvenPct}%' },
   'metric.capHeld':      { en: 'Held above cap',     ko: '상한 유예' },
   'metric.repayRate':    { en: 'Repayment rate',     ko: '정상 상환률' },
 
@@ -156,7 +150,7 @@ export const COPY = {
   'panel.issuerCompare':{ en: 'Issuers compared',         ko: '발급사 비교' },
   'panel.issuerPicked': { en: 'Selected issuer',          ko: '선택한 발급사' },
   'panel.positions':    { en: 'Refund positions',         ko: '환불 포지션' },
-  'panel.yearSummary':  { en: 'One year, summarised',     ko: '누적 운영 요약' },
+  'panel.yearSummary':  { en: 'One year, summarised',     ko: '데모 이전 1년 요약' },
   'panel.contractFunds':{ en: 'Funds held by the contract', ko: '컨트랙트 보유 자금' },
   'panel.lpComposition':{ en: 'LP deposit composition',   ko: 'LP 예치금 구성' },
   'panel.withdrawable': { en: 'Available to withdraw',    ko: '출금 가능액' },
@@ -278,7 +272,7 @@ export const COPY = {
   'tile.lastOne':       { en: 'most recent',         ko: '최근 1건' },
   'tile.lossConfirmed': { en: 'Confirmed loss',      ko: '확정 손실' },
   'tile.lossRate':      { en: 'Loss rate',           ko: '손실률' },
-  'tile.breakeven':     { en: 'break-even 0.35%',    ko: '손익분기 0.35%' },
+  'tile.breakeven':     { en: 'break-even {param.breakEvenPct}%', ko: '손익분기 {param.breakEvenPct}%' },
   'tile.capHeld':       { en: 'Held above cap',      ko: '상한 유예' },
   'tile.reserveLeft':   { en: 'Reserve balance',     ko: '준비금 잔액' },
   'tile.lpRealised':    { en: 'LP realised return',  ko: 'LP 실현 수익률' },
@@ -626,12 +620,14 @@ export const COPY = {
   'bf.nudgeTitle':  { en: 'Worth seeing {id} first', ko: '{id}을 먼저 보는 편이 낫습니다' },
   'bf.nudgeGo':     { en: 'Open {id} first →',      ko: '{id} 먼저 보기 →' },
   'bf.nudgeAnyway': { en: 'Open it anyway',         ko: '그래도 열기' },
+  'bf.stageDone':   { en: '✓ Already run —',      ko: '✓ 이미 실행했습니다 —' },
+  'bf.conclusion':  { en: 'Beyond that · what this scenario shows',
+                      ko: '그 밖에 · 이 시나리오의 결론' },
   'bf.noChangeTitle': { en: 'No change — and that is the result',
                         ko: '변화 없음 — 그것이 결과입니다' },
   'bf.doneAll':     { en: '✓ You have reviewed every screen for {id}',
                       ko: '✓ {id}의 모든 화면을 확인했습니다' },
   'bf.nextPoint':   { en: 'Next · {id} {title} →',  ko: '다음 · {id} {title} →' },
-  'bf.seeEverything': { en: 'See it all on the public view →', ko: '공개 뷰에서 전체 보기 →' },
   'bf.rewindNote':  { en: 'Returns to the state just before {id}.',
                       ko: '{id} 직전 상태로 돌아갑니다.' },
   'bf.rewindNoteAlso': { en: 'Returns to the state just before {id} — the {n} later timepoints you opened are cleared too.',
@@ -646,16 +642,6 @@ export const COPY = {
   'app.doneSub':   { en: 'The issuer console shows how that 1,000 was recorded, and from there you can run the delay, loss and freeze scenarios yourself',
                      ko: '발급사 콘솔에서 방금 그 1,000이 어떻게 기록됐는지 보고, 거기서 지연·손실·동결 시나리오를 직접 실행해볼 수 있습니다' },
   'app.doneBadge': { en: 'Check',                  ko: '확인' },
-
-  'replay.inProgress': { en: 'Replaying the refund experience.', ko: '환불 체험을 다시 보는 중입니다.' },
-  'replay.noteUser':   { en: 'The operating screens are showing the state right after the run. Going back restores {id} exactly — figures and review ticks included.',
-                         ko: '지금은 운영 화면도 체험 직후 상태를 함께 보여줍니다. 돌아가면 {id}까지 진행한 화면이 수치와 확인 기록까지 그대로 복원됩니다.' },
-  'replay.noteScen':   { en: 'This screen is the state right after the run. To carry on with the timepoints you have to go back.',
-                         ko: '이 화면은 체험 직후 상태입니다. 시나리오를 이어서 보려면 돌아가야 합니다.' },
-  'replay.back':       { en: '← Back · {id}',      ko: '← 돌아가기 · {id}까지 진행한 화면' },
-  'replay.paused':     { en: 'Continues after you go back', ko: '돌아간 뒤 이어집니다' },
-  'replay.sameTx':     { en: 'Replayed, so the same transaction is shown — one refund is only ever advanced once.',
-                         ko: '다시 보기이므로 앞서와 같은 트랜잭션이 표시됩니다 — 같은 환불 건은 한 번만 반영됩니다.' },
 
   // ── Batch 3: verifier exclusions ─────────────────────────────
   'excl.2':     { en: 'Not repaid after the settlement was received', ko: '정산금 수취 후 미상환' },
@@ -682,8 +668,12 @@ export const COPY = {
 
   // ── Batch 3: LP notes ────────────────────────────────────────
   'wd.locked.none':   { en: 'Nothing is under review', ko: '심사 중인 건이 없습니다' },
-  'lp.yearNoteLoss':  { en: 'Loss rate {loss}% against a 0.35% break-even, and LP net result {net}. Incidents were stacked on top of a single year\'s volume here, so the pool sits above the line — at the year\'s LP income of {fee} that is about {months} months to recover. What makes the same incident smaller next time is spread, not time — scenario 9 shows it.',
-                        ko: '손실률 {loss}%, 손익분기는 0.35%이고 LP 순손익은 {net}입니다. 사고가 1년치 물량 위에 겹쳐 난 구간이라 위에 있으며, 연 수수료 {fee} 기준 약 {months}개월이면 회복됩니다. 같은 사고가 다시 나도 작게 끝나게 만드는 것은 시간이 아니라 분산입니다 — 시나리오 9에서 확인할 수 있습니다.' },
+  'lp.yearFold':      { en: 'The year this is all measured against',
+                        ko: '이 모든 수치의 기준이 되는 1년' },
+  'lp.yearNoteHeld':  { en: 'Loss rate {loss}% against a {param.breakEvenPct}% break-even. {lost} has been confirmed as a loss and the year\'s fee income is larger, so the LP net result is still {net}. This is the income losses come out of — scenario 3 shows what happens when several arrive at once.',
+                        ko: '손실률 {loss}%, 손익분기는 {param.breakEvenPct}%입니다. 확정 손실 {lost}보다 1년치 수수료가 커서 LP 순손익은 아직 {net}입니다. 손실은 이 수익에서 깎이며, 여러 건이 한꺼번에 오면 어떻게 되는지는 시나리오 3에서 볼 수 있습니다.' },
+  'lp.yearNoteLoss':  { en: 'Loss rate {loss}% against a {param.breakEvenPct}% break-even, and LP net result {net}. Incidents were stacked on top of a single year\'s volume here, so the pool sits above the line — at the year\'s LP income of {fee} that is about {months} months to recover. What makes the same incident smaller next time is spread, not time — scenario 9 shows it.',
+                        ko: '손실률 {loss}%, 손익분기는 {param.breakEvenPct}%이고 LP 순손익은 {net}입니다. 사고가 1년치 물량 위에 겹쳐 난 구간이라 위에 있으며, 연 수수료 {fee} 기준 약 {months}개월이면 회복됩니다. 같은 사고가 다시 나도 작게 끝나게 만드는 것은 시간이 아니라 분산입니다 — 시나리오 9에서 확인할 수 있습니다.' },
   'lp.yearNoteClean': { en: 'No loss yet. Run a capital-risk timepoint and this income is what it comes out of.',
                         ko: '아직 손실이 없습니다. 자금 위험 시나리오를 실행하면 이 수익에서 얼마가 깎이는지 바로 비교됩니다.' },
   'lp.wdNoteLocked':  { en: '{amount} is locked behind {n} position(s) still awaiting a ruling. A normal repayment or a recovery releases all of it. An individual LP multiplies this by their share.',
@@ -698,8 +688,13 @@ export const COPY = {
 
   // ── Batch 4: trend, tags, chain bar, footer ──────────────────
   'sec.navTrendSub':  { en: 'across the whole demo',  ko: '데모 전 구간' },
+  'chain.chain':      { en: 'chain',                  ko: 'chain' },
+  'chain.block':      { en: 'block',                  ko: 'block' },
+  'chain.contract':   { en: 'contract',               ko: 'contract' },
   'chain.lastEvent':  { en: 'Last event',             ko: '최근 이벤트' },
+  'chain.synced':     { en: 'Envio indexer in sync',  ko: 'Envio 동기화됨' },
   'chain.oneLedger':  { en: 'All five screens read this one ledger', ko: '다섯 화면이 이 원장을 봅니다' },
+  'iss.rampUp':       { en: 'ramp-up',                ko: '램프업' },
   'foot.fiction':     { en: 'HYBRID Travel Card (North America · Europe, acquirer α) and AURA Travel Card (Asia, acquirer β) are invented companies. So are the hotels, the merchants and every figure on these screens.',
                         ko: 'HYBRID Travel Card(북미·유럽 · 매입사 α)와 AURA Travel Card(아시아 · 매입사 β)는 가상의 회사입니다. 호텔과 가맹점, 이 화면의 모든 수치도 마찬가지입니다.' },
 } as const satisfies Record<string, Phrase>;

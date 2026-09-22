@@ -31,8 +31,8 @@ export interface TimepointGroup {
  */
 export const TIMEPOINT_GROUPS: readonly TimepointGroup[] = [
   { key: 'normal',     copy: 'cat.normal',     ids: ['t1'] },
-  // t3b and t9b are NOT here: they are second stages of t3 and t9, reached
-  // from those briefings only. See TimepointNarrative.follow.
+  // t3b, t4b and t9b are NOT here: they are second stages of t3, t4 and t9,
+  // reached from those briefings only. See TimepointNarrative.follow.
   { key: 'fund',       copy: 'cat.fund',       ids: ['t2', 't3', 't4'] },
   { key: 'ops',        copy: 'cat.ops',        ids: ['t5', 't6', 't7'] },
   { key: 'verify',     copy: 'cat.verify',     ids: ['t8'] },
@@ -40,7 +40,7 @@ export const TIMEPOINT_GROUPS: readonly TimepointGroup[] = [
 ];
 
 /** Every id must appear exactly once, or a timepoint becomes unreachable. */
-const FOLLOW_PARENT: Partial<Record<TimepointId, TimepointId>> = { t3b: 't3', t9b: 't9' };
+const FOLLOW_PARENT: Partial<Record<TimepointId, TimepointId>> = { t3b: 't3', t4b: 't4', t9b: 't9' };
 
 export function groupOf(id: TimepointId): TimepointGroup {
   // A follow-up belongs to its parent's category, so opening one keeps the

@@ -4,7 +4,7 @@
 
 Built for **Monad Metropolis** — Consumer Products & Payments.
 
-> **Team members start here:** [`PRD.md`](./PRD.md) — roles, shared contracts, timeline. Read sections 1–10, then the chapter for your role.
+> **Team members start here:** [`PROJECT_SPEC.md`](./PROJECT_SPEC.md) — roles, shared contracts, timeline. Read sections 1–10, then the chapter for your role.
 
 ---
 

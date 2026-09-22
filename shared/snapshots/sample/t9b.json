@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "runId": "sample",
   "timepointId": "t9b",
-  "seq": 11,
+  "seq": 12,
   "label": {
     "ko": "자본이 몰려올 때",
     "en": "Capital arrives"
@@ -136,7 +136,13 @@
       "state": "CoveredLoss",
       "evidence": "Upstream settlement agent non-receipt confirmation",
       "txHash": "0x7f4c64626653e86ddbfa46d6e896fabbc657a851c3f4f325ae860b387ce8c942",
-      "createdAtTimepoint": 1
+      "createdAtTimepoint": 1,
+      "history": [
+        "Advanced",
+        "Overdue",
+        "Review",
+        "CoveredLoss"
+      ]
     },
     {
       "refundKey": "0xf81d3e00e2f0f69279de7ca4b08c2e9ecc938adc61a6a1c2abec1ea8bdfe6376",
@@ -149,7 +155,14 @@
       "state": "RecoveryRecorded",
       "evidence": "Acquirer β stopped settling",
       "txHash": "0x27dedfbd20acb5fa1ff161431a39a1d2631115d416f4d60d2cea2cd1664379be",
-      "createdAtTimepoint": 3
+      "createdAtTimepoint": 3,
+      "history": [
+        "Advanced",
+        "Overdue",
+        "Review",
+        "CapHeld",
+        "RecoveryRecorded"
+      ]
     },
     {
       "refundKey": "0x10172677b37dd6a84362e29b985702b85c8ffc0291ce9846f35372a4a19f05ad",
@@ -162,7 +175,14 @@
       "state": "RecoveryRecorded",
       "evidence": "Acquirer β stopped settling",
       "txHash": "0x649bea7a2d31b9af3ed84a9f236e07df22bf57bf57bcc24770e712738d847c43",
-      "createdAtTimepoint": 3
+      "createdAtTimepoint": 3,
+      "history": [
+        "Advanced",
+        "Overdue",
+        "Review",
+        "CapHeld",
+        "RecoveryRecorded"
+      ]
     },
     {
       "refundKey": "0xb87b46d8d839bf7fd568bd9c8b160c6159805b399e1f250c25ab7d81cafec803",
@@ -175,7 +195,14 @@
       "state": "RecoveryRecorded",
       "evidence": "Acquirer β stopped settling",
       "txHash": "0x0cb4439d624f6b6f48e8b6411d98fb63b692f96eac3689757686f236fbab9677",
-      "createdAtTimepoint": 3
+      "createdAtTimepoint": 3,
+      "history": [
+        "Advanced",
+        "Overdue",
+        "Review",
+        "CapHeld",
+        "RecoveryRecorded"
+      ]
     },
     {
       "refundKey": "0x2fde037b48def78bc2467363ae203dff036dc54638949bd7cefe3ad49cf14948",
@@ -188,7 +215,14 @@
       "state": "RecoveryRecorded",
       "evidence": "Acquirer β stopped settling",
       "txHash": "0x98639676b7b8e49ef5f6c9359caf0ac594fbb2f9d0e811103cdc32de0a7c4f98",
-      "createdAtTimepoint": 3
+      "createdAtTimepoint": 3,
+      "history": [
+        "Advanced",
+        "Overdue",
+        "Review",
+        "CapHeld",
+        "RecoveryRecorded"
+      ]
     },
     {
       "refundKey": "0xed41a525d330e09164fa4fe28f561d7140ddfd16ae6e4808ed0869fbeacc5a6c",
@@ -253,7 +287,13 @@
       "state": "Repaid",
       "evidence": null,
       "txHash": "0x85caccc3d766654d803e411d52f83bb88aca672d557cfa7e150d5abd124bffdd",
-      "createdAtTimepoint": 5
+      "createdAtTimepoint": 5,
+      "history": [
+        "Advanced",
+        "Overdue",
+        "Review",
+        "Repaid"
+      ]
     },
     {
       "refundKey": "0x0941ee3553c0c201880e1a62b94ad82d88a3c4ca0257cf84e34d18a49dca5498",

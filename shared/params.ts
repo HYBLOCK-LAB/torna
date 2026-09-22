@@ -8,7 +8,7 @@
  * to read from.
  *
  * If a value here ever disagrees with the contract, the contract is right and
- * this file is a bug. Check against PRD ch.4.
+ * this file is a bug. Check against PROJECT_SPEC.md ch.4.
  *
  * Owner: A(서진)
  */
@@ -39,6 +39,8 @@ export const PARAMS = {
   reserveSeed: 500,
   /** Average advance term, in days. */
   avgTermDays: 5,
+  /** Loss rate at which fee income exactly covers losses. */
+  breakEvenPct: 0.35,
 } as const;
 
 export type ParamKey = keyof typeof PARAMS;
