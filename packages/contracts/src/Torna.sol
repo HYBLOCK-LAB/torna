@@ -19,15 +19,17 @@ import {
     PositionState,
     IssuerState,
     AdvanceRejection,
+    DepositRejection,
     IssuerRegistration,
     CollateralDepositRequest,
+    RepaymentRequest,
     PermitSignature,
     InvalidAddress,
     InvalidAsset,
     InvalidAssetDecimals
 } from "./TornaTypes.sol";
 
-/// @notice Local PoC: initial liquidity, collateral and signed advances. No repayment/withdrawal yet.
+/// @notice Local PoC: initial liquidity, collateral, signed advances and full repayments.
 contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -38,6 +40,7 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
     error BootstrapAlreadyDeposited(address lp);
     error InvalidBootstrapAmount(uint256 expected, uint256 actual);
     error LiquidityNotReady();
+    error InvalidLiquidityAmount();
     error PoolDepositCapExceeded();
     error UnexpectedTokenReceipt(uint256 expected, uint256 actual);
     error IssuerAlreadyRegistered(address issuer);
@@ -56,11 +59,22 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
     error InsufficientFeeAllowance(uint256 available, uint256 required);
     error UnexpectedTokenPayment(uint256 expected, uint256 debited, uint256 received);
     error InsufficientAssetBacking(uint256 actual, uint256 required);
+    error InvalidRepaymentState(bytes32 refundKey, PositionState state);
+    error RepaymentIssuerMismatch(address expected, address actual);
+    error RepaymentAmountMismatch(uint256 expected, uint256 actual);
+    error RepaymentAuthorizationExpired(uint256 deadline);
+    error InvalidRepaymentNonce(uint256 expected, uint256 actual);
+    error InvalidRepaymentSigner(address signer, address issuer);
+    error InsufficientRepaymentAllowance(uint256 available, uint256 required);
+    error ReserveAlreadySeeded();
+    error InvalidReserveSeedAmount(uint256 expected, uint256 actual);
+    error InsufficientReserveSeedAllowance(uint256 available, uint256 required);
 
     event InitialLiquidityConfigured(address[3] lps);
     event InitialLiquidityCompleted(uint256 totalPrincipal);
 
     uint256 public constant INITIAL_LIQUIDITY = 10_000e6;
+    uint256 public constant RESERVE_SEED = 500e6;
     uint256 public constant ISSUER_RAMP_PERIOD = 30 days;
     uint256 public constant ADVANCE_FEE_BPS = 30;
     uint256 public constant LP_FEE_BPS = 8000;
@@ -78,12 +92,14 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
     // All registered issuers count, including zero-collateral issuers. No removal path yet.
     uint256 public registeredIssuerCount;
     mapping(address => uint256) public advanceNonces;
+    mapping(address => uint256) public repaymentNonces;
     mapping(bytes32 => Position) private _positions;
     mapping(address => uint256) public issuerOutstanding;
     mapping(bytes32 => uint256) public acquirerOutstanding;
     uint256 public totalOutstanding;
     uint256 public totalLpFees;
     uint256 public reserveBalance;
+    bool public reserveSeeded;
     uint256 public protocolFees;
     uint256 public totalAdvanceCount;
     uint256 public totalAdvanced;
@@ -94,6 +110,9 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
     );
     bytes32 public constant COLLATERAL_DEPOSIT_TYPEHASH = keccak256(
         "CollateralDepositRequest(address issuer,uint256 amount,uint256 nonce,uint256 deadline)"
+    );
+    bytes32 public constant REPAYMENT_REQUEST_TYPEHASH = keccak256(
+        "RepaymentRequest(bytes32 refundKey,address issuer,uint256 amount,uint256 nonce,uint256 deadline)"
     );
 
     // Keep the conventional asset() query name in the public interface.
@@ -208,6 +227,22 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
         protocolFee = fee - lpFee - reserveFee;
     }
 
+    /// @notice Admin seeds the fixed PRD reserve before scenario execution.
+    function seedReserve(uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) nonReentrant {
+        if (reserveSeeded) revert ReserveAlreadySeeded();
+        if (amount != RESERVE_SEED) revert InvalidReserveSeedAmount(RESERVE_SEED, amount);
+        uint256 allowance = asset.allowance(msg.sender, address(this));
+        if (allowance < amount) revert InsufficientReserveSeedAllowance(allowance, amount);
+        uint256 beforeBalance = asset.balanceOf(address(this));
+        IERC20(address(asset)).safeTransferFrom(msg.sender, address(this), amount);
+        uint256 afterBalance = asset.balanceOf(address(this));
+        uint256 received = afterBalance >= beforeBalance ? afterBalance - beforeBalance : 0;
+        if (received != amount) revert UnexpectedTokenReceipt(amount, received);
+        reserveBalance += amount;
+        reserveSeeded = true;
+        emit ReserveSeeded(amount);
+    }
+
     /// @notice Submit an issuer-signed advance using existing fee allowance.
     /// @return issued False plus AdvanceRejected means no issuance, despite a successful receipt.
     function advance(AdvanceRequest calldata request, bytes calldata signature)
@@ -315,6 +350,111 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
         if (debited != amount || received != amount) {
             revert UnexpectedTokenPayment(amount, debited, received);
         }
+    }
+
+    /// @notice Repay one Advanced position in full using an existing token allowance.
+    /// @dev Partial repayment is intentionally not introduced while PRD decision D05 is open.
+    function repay(RepaymentRequest calldata request, bytes calldata signature)
+        external
+        onlyRole(SUBMITTER_ROLE)
+        nonReentrant
+    {
+        _consumeRepaymentAuthorization(request, signature);
+        _receiveRepayment(request.issuer, request.amount);
+        _recordRepayment(request);
+    }
+
+    /// @notice Approve the exact principal and repay it in one relayer transaction.
+    function repayWithPermit(
+        RepaymentRequest calldata request,
+        bytes calldata signature,
+        PermitSignature calldata permitSignature
+    ) external onlyRole(SUBMITTER_ROLE) nonReentrant {
+        _consumeRepaymentAuthorization(request, signature);
+        // A third party may already have relayed the permit. The independent repayment
+        // signature and the exact allowance check remain mandatory when permit fails.
+        try IERC20Permit(address(asset))
+            .permit(
+                request.issuer,
+                address(this),
+                request.amount,
+                permitSignature.deadline,
+                permitSignature.v,
+                permitSignature.r,
+                permitSignature.s
+            ) { }
+            catch { }
+        _receiveRepayment(request.issuer, request.amount);
+        _recordRepayment(request);
+    }
+
+    /// @notice Digest for an issuer's full-principal repayment authorization.
+    function hashRepaymentRequest(RepaymentRequest calldata request) public view returns (bytes32) {
+        return _hashTypedDataV4(
+            keccak256(
+                abi.encode(
+                    REPAYMENT_REQUEST_TYPEHASH,
+                    request.refundKey,
+                    request.issuer,
+                    request.amount,
+                    request.nonce,
+                    request.deadline
+                )
+            )
+        );
+    }
+
+    function _consumeRepaymentAuthorization(
+        RepaymentRequest calldata request,
+        bytes calldata signature
+    ) private {
+        Position storage position = _positions[request.refundKey];
+        if (!position.exists) revert UnknownPosition(request.refundKey);
+        if (position.state != PositionState.Advanced) {
+            revert InvalidRepaymentState(request.refundKey, position.state);
+        }
+        if (request.issuer != position.issuer) {
+            revert RepaymentIssuerMismatch(position.issuer, request.issuer);
+        }
+        if (request.amount != position.amount) {
+            revert RepaymentAmountMismatch(position.amount, request.amount);
+        }
+        if (block.timestamp > request.deadline) {
+            revert RepaymentAuthorizationExpired(request.deadline);
+        }
+        uint256 nonce = repaymentNonces[request.issuer];
+        if (request.nonce != nonce) revert InvalidRepaymentNonce(nonce, request.nonce);
+        address signer = ECDSA.recover(hashRepaymentRequest(request), signature);
+        if (signer != request.issuer) revert InvalidRepaymentSigner(signer, request.issuer);
+        repaymentNonces[request.issuer] = nonce + 1;
+    }
+
+    function _receiveRepayment(address issuer, uint256 amount) private {
+        uint256 allowance = asset.allowance(issuer, address(this));
+        if (allowance < amount) revert InsufficientRepaymentAllowance(allowance, amount);
+        uint256 beforePool = asset.balanceOf(address(this));
+        uint256 beforeIssuer = asset.balanceOf(issuer);
+        IERC20(address(asset)).safeTransferFrom(issuer, address(this), amount);
+        uint256 afterPool = asset.balanceOf(address(this));
+        uint256 afterIssuer = asset.balanceOf(issuer);
+        uint256 debited = beforeIssuer >= afterIssuer ? beforeIssuer - afterIssuer : 0;
+        uint256 received = afterPool >= beforePool ? afterPool - beforePool : 0;
+        if (debited != amount || received != amount) {
+            revert UnexpectedTokenPayment(amount, debited, received);
+        }
+    }
+
+    function _recordRepayment(RepaymentRequest calldata request) private {
+        Position storage position = _positions[request.refundKey];
+        position.state = PositionState.Repaid;
+        issuerOutstanding[request.issuer] -= request.amount;
+        acquirerOutstanding[position.acquirerHash] -= request.amount;
+        totalOutstanding -= request.amount;
+
+        uint256 required = poolCash() + totalCollateral + reserveBalance + protocolFees;
+        uint256 actual = asset.balanceOf(address(this));
+        if (actual < required) revert InsufficientAssetBacking(actual, required);
+        emit AdvanceRepaid(request.refundKey, request.amount);
     }
 
     /// @dev Business rejections retain the PRD event codes; malformed signed input reverts.
@@ -495,6 +635,52 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
             initialLiquidityComplete = true;
             emit InitialLiquidityCompleted(nextPrincipal);
         }
+    }
+
+    /// @notice Deposit LP principal after the fixed bootstrap, accepting only the available room.
+    /// @dev The caller pays gas and must approve Torna. Any remainder is not transferred.
+    function depositLiquidity(uint256 amount)
+        external
+        whenLiquidityReady
+        nonReentrant
+        returns (uint256 accepted)
+    {
+        if (amount == 0) revert InvalidLiquidityAmount();
+        accepted = liquidityDepositRoom(msg.sender);
+        if (accepted > amount) accepted = amount;
+        if (accepted == 0) {
+            emit DepositRejected(msg.sender, amount, uint8(_depositRejectionReason(msg.sender)));
+            return 0;
+        }
+
+        uint256 balanceBefore = asset.balanceOf(address(this));
+        IERC20(address(asset)).safeTransferFrom(msg.sender, address(this), accepted);
+        uint256 balanceAfter = asset.balanceOf(address(this));
+        uint256 received = balanceAfter >= balanceBefore ? balanceAfter - balanceBefore : 0;
+        if (received != accepted) revert UnexpectedTokenReceipt(accepted, received);
+
+        lpPrincipal[msg.sender] += accepted;
+        totalLpPrincipal += accepted;
+        emit LiquidityDeposited(msg.sender, accepted);
+        if (accepted != amount) {
+            emit DepositRejected(
+                msg.sender, amount - accepted, uint8(_depositRejectionReason(msg.sender))
+            );
+        }
+    }
+
+    /// @notice Maximum additional principal currently accepted for one LP under both PRD caps.
+    function liquidityDepositRoom(address lp) public view returns (uint256) {
+        return Limits.depositRoom(totalLpPrincipal, lpPrincipal[lp], totalOutstanding);
+    }
+
+    function _depositRejectionReason(address lp) private view returns (DepositRejection) {
+        uint256 cap = Limits.depositCap(totalOutstanding);
+        uint256 poolRoom = Limits.remaining(cap, totalLpPrincipal);
+        uint256 individualRoom = Limits.remaining(Math.mulDiv(cap, 2500, 10_000), lpPrincipal[lp]);
+        return poolRoom <= individualRoom
+            ? DepositRejection.DepositCapExceeded
+            : DepositRejection.ConcentrationExceeded;
     }
 
     /// @notice Diagnostic digest. Does not check authorization, expiry, nonce or uniqueness.

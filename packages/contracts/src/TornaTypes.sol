@@ -79,6 +79,16 @@ struct CollateralDepositRequest {
     uint256 deadline;
 }
 
+/// @notice Full-principal repayment authorized by the issuer for one position.
+/// @dev Replay protection is both per-issuer nonce and the position's terminal Repaid state.
+struct RepaymentRequest {
+    bytes32 refundKey;
+    address issuer;
+    uint256 amount;
+    uint256 nonce;
+    uint256 deadline;
+}
+
 /// @notice Permit owner/spender/value are fixed by the deposit, never arbitrary caller inputs.
 struct PermitSignature {
     uint256 deadline;

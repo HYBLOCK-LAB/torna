@@ -10,6 +10,8 @@ Owner: Minseo (B). Version-one wire-format proposal, ready for consumer review.
 | permit.ts | MockUSDC Permit signing types, token domain and narrow token approval ABI |
 | collateral.ts | Collateral action signing types and implemented deposit/read ABI |
 | advance.ts | Implemented advance/fee Permit API and position/accounting queries |
+| repayment.ts | Implemented issuer-signed full-principal repayment and nonce ABI |
+| liquidity.ts | Implemented post-bootstrap LP deposit and available-room ABI |
 | Torna.json | Full ABI exported from the compiled implementation, including custom errors |
 | states.ts | Solidity enum indexes and snapshot-compatible state names |
 | reasons.ts | Advance rejection codes 1..8 and deposit rejection codes 1..2 |
@@ -17,12 +19,15 @@ Owner: Minseo (B). Version-one wire-format proposal, ready for consumer review.
 | fixtures/advance-request.json | Public fixed hashes consumed by Solidity and TypeScript tests |
 | fixtures/permit.json | Public Permit hashes checked by Solidity and TypeScript, without keys/signatures |
 | fixtures/collateral-deposit.json | Public collateral-action hashes checked by both languages |
+| fixtures/repayment-request.json | Public repayment-action hashes checked by both languages |
 
 Regenerate Torna.json with `corepack pnpm --filter @torna/contracts export:abi` after
 changing Solidity interfaces. Tests compare it exactly to the compiled implementation.
 Initial LP funding emits LiquidityDeposited, admin issuer registration emits
-IssuerRegistered, collateral deposits emit CollateralDeposited, and advances emit
-AdvanceIssued or AdvanceRejected. Repayment/withdrawal/loss execution is still pending.
+IssuerRegistered, collateral deposits emit CollateralDeposited, advances emit
+AdvanceIssued or AdvanceRejected, full repayment emits AdvanceRepaid, and post-bootstrap
+LP deposits emit LiquidityDeposited plus DepositRejected for an unaccepted remainder.
+Partial repayment, withdrawal and loss execution are still pending.
 D01 also adds InitialLiquidityConfigured(address[3]) and
 InitialLiquidityCompleted(uint256) setup events in the compiled artifact; they are
 not part of the 20 PRD entries in events.ts. See the contracts README for the setup API.
@@ -121,8 +126,8 @@ Integration constraints:
 - Anyone can relay a valid permit; the token does not require SUBMITTER_ROLE. Relaying
   it gives that caller no spending rights. Only the signed spender receives allowance.
 - A permit is not authorization for a particular collateral deposit, repayment or
-  beneficiary. Collateral now requires its own signed action as described below;
-  future financial actions must also enforce their own authorization.
+  beneficiary. Collateral and repayment each require their own signed action as
+  described below; future financial actions must do the same.
 - Another caller can submit the permit first. The combined deposit tolerates this
   only after independently validating the action and checking the required allowance.
 - This implementation uses ECDSA signatures from our synthetic EOA test accounts.
@@ -190,8 +195,9 @@ Failure rolls back only the current transaction. Thus combined approval+deposit
 roll back together, while approval from a previous successful transaction remains.
 Retry the same action only after confirming it did not already succeed and reading
 the action nonce. LP principal, collateral and raw contract token balance are
-different accounting values. Withdrawals, repayment and full issuer status transitions
-remain unimplemented. Fee collection and state-backed advance limits are now implemented.
+different accounting values. Withdrawals, partial repayment and full issuer status
+transitions remain unimplemented. Fee collection, full normal repayment and
+state-backed advance limits are implemented.
 
 ## Advance submission (implemented)
 
@@ -222,7 +228,7 @@ inspect positionOf, the logs and current nonce first.
 PRD split chosen by Minseo: a 1,000 advance collects 3 USDC separately and books
 2.400000 to LPs, 0.399000 to reserve and 0.201000 to protocol. The issuer receives
 the full 1,000 principal. Total fee/LP/reserve are floored in token base units and
-protocol receives the residual. No fee is charged again by the planned principal-only repayment.
+protocol receives the residual. No fee is charged again by principal-only repayment.
 
 Rejection order: duplicate key (1), unregistered issuer (2), expired deadline (5),
 invalid signature/domain (3), then nonce/input validation, suspended (8), issuer limit (6),
@@ -238,7 +244,47 @@ Queries: `positionOf`, `issuerLimit`, `issuerStateOf`, `advanceNonces`,
 unknown keys revert. Margin/coverage are frozen loss terms, not individually locked collateral.
 Count includes all registered issuers; suspension does not increase other issuers' limits.
 Pool queries currently assume no losses, withdrawals or external deployments; those
-operations and per-LP fee distribution are not enabled yet. Reserve seed funding is pending.
+operations and per-LP fee distribution are not enabled yet. Reserve seed funding and
+post-bootstrap LP deposits are implemented.
+
+## Post-bootstrap LP deposits (implemented)
+
+LPs call `depositLiquidity(amount)` themselves, so the LP supplies gas and a normal
+MockUSDC allowance. The contract calculates
+`liquidityDepositRoom(lp) = min(pool cap room, LP concentration room)` from the PRD
+section 7 formula, transfers only the accepted amount and returns it. If an amount is
+partly or fully refused, `DepositRejected(lp, rejectedRemainder, reason)` records the
+unaccepted remainder: `1` is the pool deposit cap and `2` is the LP concentration cap.
+
+Read the room before approving if an exact allowance is desired. A request of zero
+reverts; a fully rejected nonzero request moves no token and records no LP principal.
+This is principal accounting only: withdrawals, per-LP fee allocation and NAV share
+settlement remain unimplemented. Import `liquidityAbi` from `liquidity.ts`; do not
+duplicate its return type or reason values in the adapter.
+
+## Full-principal repayment (implemented)
+
+Import `repaymentRequestTypes`, `REPAYMENT_REQUEST_PRIMARY_TYPE` and `repaymentAbi`
+from `shared/abi/repayment.ts`. The issuer signs a Torna-domain repayment action and,
+for the combined path, a separate MockUSDC Permit. The submitter sends the transaction.
+
+| Signature | Domain contract | Nonce source | Exact value |
+|---|---|---|---|
+| Permit | MockUSDC | token.nonces(issuer) | stored position principal |
+| RepaymentRequest | Torna | Torna.repaymentNonces(issuer) | same full principal |
+
+Read the position first and copy its refundKey, issuer and amount without rounding.
+Call `repayWithPermit(request, actionSignature, permitSignature)`, or `repay` when an
+allowance already exists. Both require SUBMITTER_ROLE. A successful receipt must include
+`AdvanceRepaid` from the configured Torna address and the position must read `Repaid`.
+
+Only `Advanced` positions are currently accepted. Success receives the exact six-decimal
+principal, decreases issuer/acquirer/aggregate outstanding, and does not change advance
+count, total advanced, collateral or fee balances. The position and per-issuer repayment
+nonce prevent replays. Partial/excess amount, mismatched issuer, unknown/non-Advanced key,
+expired/invalid action, missing allowance, short transfer and backing deficits revert
+atomically. This deliberately leaves partial repayment and overdue/review repayment policy
+open under D05 rather than silently inventing those rules.
 
 ## Identifier encoding
 
@@ -283,4 +329,4 @@ corepack pnpm --filter @torna/contracts typecheck
 
 These commands compare types, event ABI entries, identifier hashes and EIP-712
 digests. See packages/contracts/DECISIONS.md for implementation decisions and the
-remaining repayment/loss/withdrawal work. Real adapter integration is not yet verified.
+remaining partial-repayment/loss/withdrawal work. Real adapter integration is not yet verified.
