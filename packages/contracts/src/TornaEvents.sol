@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-/// @notice PRD wire events. Registration, collateral, initial LP funding, advances and repayment are implemented.
+/// @notice PRD wire events for registration, funding, advances, repayment and loss review.
 abstract contract TornaEvents {
     event IssuerRegistered(address indexed issuer, bytes32 acquirerHash, string name);
     event CollateralDeposited(address indexed issuer, uint256 amount);

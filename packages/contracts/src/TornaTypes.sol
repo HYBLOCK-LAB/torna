@@ -63,6 +63,15 @@ struct Position {
     PositionState state;
 }
 
+/// @notice One LP withdrawal priced from the current pool NAV.
+/// @dev Principal is the requested LP principal; the other fields snapshot its
+///      proportional fee/loss shares so a pending withdrawal is settled once.
+struct LpWithdrawal {
+    uint256 principal;
+    uint256 paid;
+    uint256 pending;
+}
+
 /// @notice Registration metadata only; collateral and operational status are not stored here.
 struct IssuerRegistration {
     bool exists;

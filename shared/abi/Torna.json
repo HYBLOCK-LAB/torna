@@ -616,6 +616,38 @@
   },
   {
     "type": "function",
+    "name": "eventRecognizedCoverage",
+    "inputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "finalizeCoveredLoss",
+    "inputs": [
+      {
+        "name": "refundKey",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "getRoleAdmin",
     "inputs": [
       {
@@ -1039,6 +1071,24 @@
   },
   {
     "type": "function",
+    "name": "openReview",
+    "inputs": [
+      {
+        "name": "refundKey",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "evidence",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "poolCapacity",
     "inputs": [],
     "outputs": [
@@ -1214,6 +1264,24 @@
       }
     ],
     "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "recordRecovery",
+    "inputs": [
+      {
+        "name": "refundKey",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "recovered",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -1468,6 +1536,30 @@
   },
   {
     "type": "function",
+    "name": "requestWithdraw",
+    "inputs": [
+      {
+        "name": "principal",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "immediate",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "pending",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "reserveBalance",
     "inputs": [],
     "outputs": [
@@ -1583,7 +1675,33 @@
   },
   {
     "type": "function",
+    "name": "totalLoss",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "totalLpFees",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "totalLpLoss",
     "inputs": [],
     "outputs": [
       {
@@ -2211,6 +2329,22 @@
   },
   {
     "type": "error",
+    "name": "EventIssuerMismatch",
+    "inputs": [
+      {
+        "name": "expected",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "actual",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "InsufficientAssetBacking",
     "inputs": [
       {
@@ -2260,6 +2394,22 @@
   {
     "type": "error",
     "name": "InsufficientPoolCash",
+    "inputs": [
+      {
+        "name": "available",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "required",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "InsufficientRecoveryAllowance",
     "inputs": [
       {
         "name": "available",
@@ -2434,6 +2584,22 @@
   },
   {
     "type": "error",
+    "name": "InvalidLossState",
+    "inputs": [
+      {
+        "name": "refundKey",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "state",
+        "type": "uint8",
+        "internalType": "enum PositionState"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "InvalidRepaymentNonce",
     "inputs": [
       {
@@ -2498,6 +2664,22 @@
   },
   {
     "type": "error",
+    "name": "InvalidReviewState",
+    "inputs": [
+      {
+        "name": "refundKey",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "state",
+        "type": "uint8",
+        "internalType": "enum PositionState"
+      }
+    ]
+  },
+  {
+    "type": "error",
     "name": "InvalidShortString",
     "inputs": []
   },
@@ -2521,6 +2703,38 @@
     "type": "error",
     "name": "PoolDepositCapExceeded",
     "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "PositionNotMatured",
+    "inputs": [
+      {
+        "name": "refundKey",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "maturity",
+        "type": "uint64",
+        "internalType": "uint64"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "RecoveryExceedsPrincipal",
+    "inputs": [
+      {
+        "name": "principal",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "recovered",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
   },
   {
     "type": "error",
@@ -2653,6 +2867,17 @@
   {
     "type": "error",
     "name": "UnknownPosition",
+    "inputs": [
+      {
+        "name": "refundKey",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "UnknownRecoveryEvent",
     "inputs": [
       {
         "name": "refundKey",

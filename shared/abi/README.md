@@ -27,13 +27,19 @@ Initial LP funding emits LiquidityDeposited, admin issuer registration emits
 IssuerRegistered, collateral deposits emit CollateralDeposited, advances emit
 AdvanceIssued or AdvanceRejected, full repayment emits AdvanceRepaid, and post-bootstrap
 LP deposits emit LiquidityDeposited plus DepositRejected for an unaccepted remainder.
-Partial repayment, withdrawal and loss execution are still pending.
+Loss execution now emits MarkedOverdue/ReviewOpened, CoveredLossFinalized or
+LossCapTriggered, and RecoveryRecorded through the verifier-only review/cap/recovery API.
+Partial repayment is still pending. LP withdrawal uses `requestWithdraw(principal)`:
+the immediate payment is `min(NAV × share, cash × share)` and any remainder is paid
+automatically after repayment. Completion removes the LP's proportional principal, fee
+share and current LP-loss share.
 D01 also adds InitialLiquidityConfigured(address[3]) and
 InitialLiquidityCompleted(uint256) setup events in the compiled artifact; they are
 not part of the 20 PRD entries in events.ts. See the contracts README for the setup API.
 Issuer registration metadata and the diagnostic ramp/limit queries are documented
 there too. Balance-derived status and signed advance execution are implemented;
-administrative suspension/removal and loss-driven state transitions remain pending.
+administrative suspension/removal remain pending. Loss-driven position transitions are
+implemented locally; see the contracts README for the event grouping boundary.
 
 ## Signing input
 
@@ -195,8 +201,8 @@ Failure rolls back only the current transaction. Thus combined approval+deposit
 roll back together, while approval from a previous successful transaction remains.
 Retry the same action only after confirming it did not already succeed and reading
 the action nonce. LP principal, collateral and raw contract token balance are
-different accounting values. Withdrawals, partial repayment and full issuer status
-transitions remain unimplemented. Fee collection, full normal repayment and
+different accounting values. Collateral withdrawal, partial repayment and full issuer
+status transitions remain unimplemented. Fee collection, LP withdrawal, full normal repayment and
 state-backed advance limits are implemented.
 
 ## Advance submission (implemented)
@@ -240,12 +246,36 @@ Deadline equality is accepted. Malformed signatures return reason 3 without ECDS
 Queries: `positionOf`, `issuerLimit`, `issuerStateOf`, `advanceNonces`,
 `issuerOutstanding`, `acquirerOutstanding`, `totalOutstanding`, `poolCapacity`,
 `poolCash`, `totalLpFees`, `reserveBalance`, `protocolFees`, `totalAdvanceCount`,
-`totalAdvanced`, `registeredIssuerCount`. Position `exists` is separate from enum zero;
+`totalAdvanced`, `totalLpLoss`, `totalLoss`, `registeredIssuerCount`. The withdrawal call
+returns its immediate and pending amounts; the active request is also represented by
+the withdrawal events. Position `exists` is separate from enum zero;
 unknown keys revert. Margin/coverage are frozen loss terms, not individually locked collateral.
 Count includes all registered issuers; suspension does not increase other issuers' limits.
-Pool queries currently assume no losses, withdrawals or external deployments; those
-operations and per-LP fee distribution are not enabled yet. Reserve seed funding and
-post-bootstrap LP deposits are implemented.
+External deployment is not enabled yet. LP withdrawals and per-LP fee settlement are
+implemented locally; collateral withdrawal and partial repayment remain open.
+Reserve seed funding, post-bootstrap LP deposits and finalized loss accounting are
+implemented.
+
+## Loss review and recovery (implemented locally)
+
+Only `VERIFIER_ROLE` may call the loss API. After a position's maturity,
+`openReview(refundKey, evidence)` records `MarkedOverdue` and `ReviewOpened` and moves
+the position to `Review`. `finalizeCoveredLoss(refundKey)` applies the pure waterfall and
+the 20% per-acquirer LP cap, producing either `CoveredLoss` or `CapHeld`.
+
+For recovery, the verifier first mints or receives the recovery token in the local demo
+and approves Torna. The verifier then calls `recordRecovery(anchorRefundKey, recovered)`.
+The contract pulls that exact amount and settles every position with the anchor's
+`acquirerHash`; it emits `RecoveryRecorded` and moves all grouped positions to
+`RecoveryRecorded`. The current implementation requires one issuer per active event;
+temporary event aggregation is cleared after settlement, while settled positions remain
+terminal. Treat the single-issuer rule as a documented demo boundary until the team agrees
+on multi-issuer collateral allocation.
+
+Read `positionOf`, `eventRecognizedCoverage`, `totalLpLoss`, `poolCapacity`,
+`totalOutstanding`, `collateralOf` and `reserveBalance` after each receipt. Do not infer
+loss completion from receipt status alone; decode the Torna events and verify the final
+position states. A failed allowance, over-recovery or invalid state reverts atomically.
 
 ## Post-bootstrap LP deposits (implemented)
 
@@ -258,8 +288,8 @@ unaccepted remainder: `1` is the pool deposit cap and `2` is the LP concentratio
 
 Read the room before approving if an exact allowance is desired. A request of zero
 reverts; a fully rejected nonzero request moves no token and records no LP principal.
-This is principal accounting only: withdrawals, per-LP fee allocation and NAV share
-settlement remain unimplemented. Import `liquidityAbi` from `liquidity.ts`; do not
+This includes NAV/share withdrawal settlement and per-LP fee allocation. Import
+`liquidityAbi` from `liquidity.ts`; do not
 duplicate its return type or reason values in the adapter.
 
 ## Full-principal repayment (implemented)
@@ -278,13 +308,12 @@ Call `repayWithPermit(request, actionSignature, permitSignature)`, or `repay` wh
 allowance already exists. Both require SUBMITTER_ROLE. A successful receipt must include
 `AdvanceRepaid` from the configured Torna address and the position must read `Repaid`.
 
-Only `Advanced` positions are currently accepted. Success receives the exact six-decimal
+`Advanced` and `Review` positions are accepted. Success receives the exact six-decimal
 principal, decreases issuer/acquirer/aggregate outstanding, and does not change advance
 count, total advanced, collateral or fee balances. The position and per-issuer repayment
-nonce prevent replays. Partial/excess amount, mismatched issuer, unknown/non-Advanced key,
+nonce prevent replays. Partial/excess amount, mismatched issuer, unknown or terminal key,
 expired/invalid action, missing allowance, short transfer and backing deficits revert
-atomically. This deliberately leaves partial repayment and overdue/review repayment policy
-open under D05 rather than silently inventing those rules.
+atomically. Partial repayment and collateral withdrawal remain open under D05.
 
 ## Identifier encoding
 
@@ -329,4 +358,5 @@ corepack pnpm --filter @torna/contracts typecheck
 
 These commands compare types, event ABI entries, identifier hashes and EIP-712
 digests. See packages/contracts/DECISIONS.md for implementation decisions and the
-remaining partial-repayment/loss/withdrawal work. Real adapter integration is not yet verified.
+remaining partial-repayment/collateral-withdrawal work. Real adapter integration and the full
+13-timepoint chain run are not yet verified.
