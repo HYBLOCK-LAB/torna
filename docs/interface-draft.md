@@ -181,7 +181,7 @@ Registered → Advanced → Repaid
 
 ## 7. 파라미터
 
-컨트랙트에 상수로 고정합니다. 값의 근거는 `PRD.md` 7장과 Notion 6번에 있습니다.
+컨트랙트에 상수로 고정합니다. 값의 근거는 `PROJECT_SPEC.md` 7장과 Notion 6번에 있습니다.
 
 ```solidity
 uint256 constant MARGIN_RATE   = 1500;  // 15%   담보율

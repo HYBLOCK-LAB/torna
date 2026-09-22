@@ -19,7 +19,7 @@ type TimepointId = (typeof ORDER)[number];
 
 /**
  * Acceptance baselines — the canonical path (cardholder experience first).
- * Source: mockup v21, measured. Also printed in PRD.md section 7.
+ * Source: mockup v21, measured. Also printed in PROJECT_SPEC.md section 7.
  * A run that does not land on these numbers has a bug in the contract or the adapter.
  */
 const BASELINE: Record<TimepointId, {
@@ -239,7 +239,7 @@ function main() {
   if (errors.length) {
     console.log(`\n실패 ${errors.length}건\n`);
     errors.forEach((e) => console.log(`  ✗ ${e}`));
-    console.log('\n막히면 PRD.md 17장 「자주 꼬이는 지점」을 보세요.\n');
+    console.log('\n막히면 PROJECT_SPEC.md 17장 「자주 꼬이는 지점」을 보세요.\n');
     process.exit(1);
   }
   console.log('\n  ✓ 통과. 이 번들은 프론트에 넣어도 됩니다.\n');

@@ -37,4 +37,4 @@ acquirers        매입사             acquirer_id · display_name
 제출된 데모는 사전 생성된 스냅샷 번들을 읽습니다. DB는 데이터를 **만드는 단계**에서만 씁니다.
 그래서 심사 중 Supabase가 멈춰도 데모는 돕니다.
 
-자세한 내용은 `PRD.md` 13장.
+자세한 내용은 `PROJECT_SPEC.md` 13장.

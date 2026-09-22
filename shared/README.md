@@ -35,4 +35,4 @@
 
 **포지션 상태값 철자**는 컨트랙트 enum · DB 컬럼 · 스냅샷 필드 · 화면 라벨이 전부 같아야 합니다. `types/snapshot.ts`의 `PositionState`가 기준입니다.
 
-자세한 내용은 `PRD.md` 10장을 보세요.
+자세한 내용은 `PROJECT_SPEC.md` 10장을 보세요.

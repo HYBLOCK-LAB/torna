@@ -8,7 +8,7 @@
  * to read from.
  *
  * If a value here ever disagrees with the contract, the contract is right and
- * this file is a bug. Check against PRD ch.4.
+ * this file is a bug. Check against PROJECT_SPEC.md ch.4.
  *
  * Owner: A(서진)
  */

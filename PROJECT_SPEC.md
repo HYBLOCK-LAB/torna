@@ -1,4 +1,4 @@
-# Torna — 개발 PRD
+# Torna — PROJECT_SPEC
 
 **Monad Metropolis · Consumer Products & Payments**
 작성 2026-09-19 · 작성자 이A(서진) · 문서 언어 한글
@@ -170,7 +170,7 @@ git push -u origin feat/contract-advance
 | 이벤트 · 함수 · 에러 이름 | **영문** |
 | 3분 기술 데모 · 2분 피치 스크립트 | **영문** |
 | 아키텍처 다이어그램 라벨 | **영문** |
-| 이 PRD · Notion 문서 | 한글 |
+| 이 PROJECT_SPEC · Notion 문서 | 한글 |
 | 팀 내부 대화 | 한글 |
 
 기준은 단순합니다. **심사위원이 볼 수 있는 것은 영문, 팀이 보는 것은 한글.**
