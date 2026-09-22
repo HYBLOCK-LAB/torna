@@ -98,7 +98,7 @@ create table public.refunds (
                   )),
   timepoint       text                            -- scenario that uses this row
                   check (timepoint in (
-                    't0', 't1', 't2', 't3', 't3b', 't4',
+                    't0', 't1', 't2', 't3', 't3b', 't4', 't4b',
                     't5', 't6', 't7', 't8', 't9', 't9b'
                   )),
   advance_tx_hash text
