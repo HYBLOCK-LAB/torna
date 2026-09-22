@@ -8,7 +8,7 @@ Owner: Minseo (B). Local PoC, updated 2026-09-22.
 - Six-decimal MockUSDC with role-restricted test minting and OpenZeppelin ERC20Permit.
 - Torna constructor, role configuration, asset validation and EIP-712 diagnostic helpers.
 - PRD request/enum/event definitions and matching shared TypeScript exports.
-- Pure Limits formulas and fresh-loss Waterfall allocation/cap checks.
+- Pure Limits formulas and Waterfall allocation, cap and recovery calculations.
 - D01 one-time initial LP funding: fixed 5,000/3,000/2,000 allocations, actual token
   receipt validation, principal accounting and irreversible completion.
 - Admin-only issuer registration with immutable registration timestamps, 30-day
@@ -19,18 +19,21 @@ Owner: Minseo (B). Local PoC, updated 2026-09-22.
   payment, separate PRD fee accounting and position/outstanding records.
 - Issuer-signed full-principal repayment with optional exact Permit, atomic token
   receipt, replay protection and outstanding/state updates.
+- Verifier-only Review, CoveredLoss/CapHeld finalization, LP-loss accounting and
+  aggregate recovery settlement for one active acquirer event.
 - A local-EVM t0 scenario that verifies the complete Permit-backed normal path:
   LP funding, issuer ramp-up, collateral, reserve seed, advance, repayment,
   event receipts, exact accounting and replay prevention.
 - Unit/fuzz tests and a shared Solidity/viem hash vector.
 
-**No partial repayment, withdrawal or recovery execution exists yet.** Post-bootstrap LP
-deposits are implemented with PRD cap-based partial acceptance; they do not implement
-LP withdrawal, NAV distribution or per-LP fee distribution.
-The loss and hashing helpers do not authorize an issuer, consume a nonce, enforce a
-deadline, or protect against replay. Do not send real funds to this foundation:
-initial deposits currently have no withdrawal path. Use synthetic local test tokens only.
-Most event declarations still describe the draft wire format, not implemented operations.
+**Partial repayment is not implemented.** LP withdrawals now use NAV/share pricing:
+`requestWithdraw(principal)` pays `min(NAV × share, cash × share)` immediately and keeps
+the remainder pending until a repayment makes it payable. Completion removes the LP's
+principal, proportional fee share and current LP-loss share. Post-bootstrap LP deposits are
+implemented with PRD cap-based partial acceptance. Loss execution is implemented locally but
+the current demo keeps one pending LP withdrawal at a time; a multi-request queue remains future work.
+the 13-timepoint chain runner and production snapshot generation are not complete.
+Do not send real funds: use synthetic local test tokens only.
 
 ## Initial liquidity (D01 approved by Minseo, 2026-09-20)
 
@@ -45,8 +48,8 @@ Most event declarations still describe the draft wire format, not implemented op
    `InitialLiquidityCompleted`. No role can reopen or repeat initial funding.
 
 Missing allowance, failed/short token receipts and reentrancy are rejected atomically.
-Direct token donations do not grant principal or count toward completion. These are
-principal records, not a completed NAV/share/withdrawal accounting implementation.
+Direct token donations do not grant principal or count toward completion. The initial
+deposit records are now connected to the NAV/share withdrawal accounting described below.
 Configuration and completion events are additional setup events, separate from the
 20 PRD events; their ABI is available in the compiled artifact, not shared/events.ts.
 
@@ -143,10 +146,10 @@ registered within it. A permit from an earlier transaction remains unchanged.
 Reentrancy is blocked across the deposit/initial-liquidity entry points.
 
 Collateral is separate from LP principal and is not automatically pool liquidity.
-Direct donations grant neither collateral nor LP principal. This does not implement
-collateral withdrawals, loss deductions, partial repayment or full operational-state
-transitions. Advance fees and a state-backed credit-limit query are described below. Do not send real funds; withdrawal
-is not available. See `shared/abi/collateral.ts` and the shared README for signing/ABI.
+Direct donations grant neither collateral nor LP principal. Collateral withdrawals,
+partial repayment and administrative operational-state transitions remain unavailable.
+Loss finalization may deduct collateral according to the PRD waterfall. See
+`shared/abi/collateral.ts` and the shared README for signing/ABI.
 
 ## Signed advances (2026-09-21)
 
@@ -179,11 +182,14 @@ to the signed issuer. Collateral is unchanged: the position's 20% issuerMargin a
 80% poolCoverage are loss terms, not collateral locked for each advance. The position
 stores fee, maturity, these loss amounts, termsVersion=1 and Advanced state.
 
-`poolCapacity = totalLpPrincipal + totalLpFees` and `poolCash = capacity - outstanding`
-in this current, no-loss/no-withdrawal/no-external-deployment implementation. Reserve,
+`poolCapacity = max(totalLpPrincipal + totalLpFees - totalLpLoss - temporary withdrawal payments, 0)` and
+`poolCash = capacity - outstanding`. Finalized LP losses reduce capacity; reserve,
 protocol fees, collateral and unsolicited donations do not increase LP capacity.
+`totalLoss()` separately reports current collateral loss + reserve loss + LP loss for
+the public metrics view.
 Per-issuer/acquirer/aggregate outstanding and total successful count/amount are stored.
-Aggregate LP fees are not yet a complete per-LP distribution/withdrawal system.
+Aggregate LP fees are distributed pro rata when an LP withdrawal completes; an active
+withdrawal's immediate payment is tracked separately until its pending remainder is paid.
 The admin seeds the fixed 500 USDC reserve once through `seedReserve`; the seed is
 tracked separately from fee-funded reserve balance and does not increase LP capacity.
 
@@ -217,8 +223,8 @@ See `shared/abi/advance.ts`, `test/Advance.t.sol` and `docs/CONTRACT_LEARNING.md
   exact principal in the same SUBMITTER_ROLE transaction.
 - `RepaymentRequest` binds refundKey, issuer, full position amount, the independent
   `repaymentNonces(issuer)` value and deadline to the Torna EIP-712 domain.
-- Only an existing `Advanced` position can be repaid. The issuer and amount must match
-  the stored position exactly; partial, excess and repeated repayments revert.
+- Only an existing `Advanced` or `Review` position can be repaid. The issuer and amount
+  must match the stored position exactly; partial, excess and repeated repayments revert.
 - Success receives the token amount exactly, sets the position to `Repaid`, and reduces
   issuer, acquirer and aggregate outstanding. Advance totals and all fee balances stay
   unchanged because PRD repayment is principal-only.
@@ -226,10 +232,36 @@ See `shared/abi/advance.ts`, `test/Advance.t.sol` and `docs/CONTRACT_LEARNING.md
   allowance, reentrancy or insufficient pool backing revert the entire transaction.
   A Permit from an earlier transaction remains available after a later repayment revert.
 
-This is the narrow normal-path repayment required for t0. D05 remains open for partial
-repayment policy, and the later overdue/review paths must define their allowed transitions
-before t5 and loss scenarios are connected. See `shared/abi/repayment.ts`,
+This is the full-principal repayment required for t0 and the implemented Review escape
+path before loss finalization. D05 remains open for partial repayment policy and
+collateral withdrawal. See `shared/abi/repayment.ts`,
 `test/Repayment.t.sol` and `test/RepaymentVector.t.sol`.
+
+## Loss review, capped losses and recovery (implemented locally)
+
+The verifier owns the loss path through three role-gated calls:
+
+- `openReview(refundKey, evidence)` can be called after maturity. It records both
+  `MarkedOverdue` and `ReviewOpened`, then changes the position to `Review`.
+- `finalizeCoveredLoss(refundKey)` applies the PRD waterfall once. Issuer margin is
+  charged first, then reserve, then LP loss. The position becomes `CoveredLoss` only
+  when the same acquirer's cumulative coverage fits within `20%` of total LP principal;
+  otherwise it becomes `CapHeld`.
+- `recordRecovery(refundKey, recovered)` pulls the recovery amount from the verifier's
+  allowance and settles every position grouped by the anchor's `acquirerHash`. Previously
+  recognized loss is reconciled so issuer collateral is not charged twice, and all grouped
+  positions become `RecoveryRecorded`.
+
+The current demo groups an event by `acquirerHash` and requires one issuer per event.
+This is an implementation boundary, not a final product decision; a multi-issuer event
+needs a separate collateral allocation rule. Recovery is recorded once per active event,
+and a later call for the same positions is rejected because they are terminal; temporary
+event aggregation is cleared so a future event can use the same acquirer. `Loss.t.sol` covers the
+PRD t3/t3b numbers, Review repayment, maturity and role checks, missing allowance,
+over-recovery rollback and duplicate recovery.
+
+The local contract gate passes, but the full 13-timepoint chain run, testnet deployment,
+and generated production snapshot bundle are not claimed here.
 
 ## Setup
 
@@ -292,9 +324,10 @@ chain path; later handlers and final bundle output remain unavailable.
   queries, signed advances and full-principal repayments.
 - src/MockUSDC.sol: test asset with ERC-2612 Permit, not native or bridged USDC.
 - src/TornaTypes.sol: request, enum codes and foundation errors.
-- src/TornaEvents.sol: event declarations from the interface draft.
+- src/TornaEvents.sol: protocol event declarations, including implemented loss events.
 - src/libraries/Limits.sol: current-outstanding deposit cap, issuer and acquirer limits.
-- src/libraries/Waterfall.sol: a newly confirmed loss and whole-position cap admission.
+- src/libraries/Waterfall.sol: fresh-loss allocation, whole-position cap admission and
+  aggregate recovery settlement.
 - test/: Solidity tests, including synthetic role fixtures.
 - test-ts/: shared wire-format conformance tests.
 - script/install-dependencies.mjs: pinned Solidity dependency installation.
@@ -302,15 +335,17 @@ chain path; later handlers and final bundle output remain unavailable.
 
 No issuer-count policy or bootstrap exception is hidden in Limits. The caller
 supplies pool capacity and issuer count. Monetary calculations round down in token
-base units; display rounding is a separate concern. Loss allocation does not settle
-recovery or decide when collateral should be charged.
+base units; display rounding is a separate concern. The stateful loss path applies
+the same pure calculations and keeps event grouping in Torna.
 
 ## Next implementation gate
 
 Initial funding follows the approved D01 decision. Resolve the remaining decisions
 in DECISIONS.md before building the other stateful token flows.
-Then implement collateral withdrawal/loss accounting alongside their tests. `shared/abi/Torna.json` is generated from the current compiled
-implementation. Regenerate with `export:abi` after interface changes; do not hand-edit it.
+Then implement collateral withdrawal and extend the LP withdrawal accounting into the
+full timepoint runner alongside its tests.
+`shared/abi/Torna.json` is generated from the current compiled implementation.
+Regenerate with `export:abi` after interface changes; do not hand-edit it.
 
 The Wednesday acceptance target remains: all Foundry tests, a continuous local
 t0-to-t9b run, and verification of the generated bundle with Minjae's label map.

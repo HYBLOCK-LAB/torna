@@ -13,6 +13,7 @@ import { ECDSA } from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import { EIP712 } from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import { TornaEvents } from "./TornaEvents.sol";
 import { Limits } from "./libraries/Limits.sol";
+import { Waterfall } from "./libraries/Waterfall.sol";
 import {
     AdvanceRequest,
     Position,
@@ -24,6 +25,7 @@ import {
     CollateralDepositRequest,
     RepaymentRequest,
     PermitSignature,
+    LpWithdrawal,
     InvalidAddress,
     InvalidAsset,
     InvalidAssetDecimals
@@ -32,6 +34,15 @@ import {
 /// @notice Local PoC: initial liquidity, collateral, signed advances and full repayments.
 contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
     using SafeERC20 for IERC20;
+
+    struct EventAccounting {
+        address issuer;
+        uint256 principal;
+        uint256 totalMargin;
+        uint256 priorMarginApplied;
+        uint256 recognizedReserve;
+        uint256 recognizedLp;
+    }
 
     error BootstrapAlreadyConfigured();
     error BootstrapNotConfigured();
@@ -66,6 +77,12 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
     error InvalidRepaymentNonce(uint256 expected, uint256 actual);
     error InvalidRepaymentSigner(address signer, address issuer);
     error InsufficientRepaymentAllowance(uint256 available, uint256 required);
+    error InvalidReviewState(bytes32 refundKey, PositionState state);
+    error PositionNotMatured(bytes32 refundKey, uint64 maturity);
+    error InvalidLossState(bytes32 refundKey, PositionState state);
+    error EventIssuerMismatch(address expected, address actual);
+    error InsufficientRecoveryAllowance(uint256 available, uint256 required);
+    error UnknownRecoveryEvent(bytes32 refundKey);
     error ReserveAlreadySeeded();
     error InvalidReserveSeedAmount(uint256 expected, uint256 actual);
     error InsufficientReserveSeedAllowance(uint256 available, uint256 required);
@@ -98,11 +115,18 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
     mapping(bytes32 => uint256) public acquirerOutstanding;
     uint256 public totalOutstanding;
     uint256 public totalLpFees;
+    uint256 public totalLpLoss;
+    uint256 public totalLoss;
+    mapping(address => LpWithdrawal) private _lpWithdrawals;
+    address private _pendingWithdrawalLp;
     uint256 public reserveBalance;
     bool public reserveSeeded;
     uint256 public protocolFees;
     uint256 public totalAdvanceCount;
     uint256 public totalAdvanced;
+    mapping(bytes32 => uint256) public eventRecognizedCoverage;
+    mapping(bytes32 => bytes32[]) private _eventPositions;
+    mapping(bytes32 => EventAccounting) private _eventAccounting;
     bytes32 public constant VERIFIER_ROLE = keccak256("VERIFIER_ROLE");
     bytes32 public constant SUBMITTER_ROLE = keccak256("SUBMITTER_ROLE");
     bytes32 public constant ADVANCE_REQUEST_TYPEHASH = keccak256(
@@ -136,8 +160,12 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
 
     /// @dev Initial LP funding must finish before any advance can execute.
     modifier whenLiquidityReady() {
-        if (!initialLiquidityComplete) revert LiquidityNotReady();
+        _requireLiquidityReady();
         _;
+    }
+
+    function _requireLiquidityReady() private view {
+        if (!initialLiquidityComplete) revert LiquidityNotReady();
     }
 
     /// @notice Admin registers a company at the current block time. No backdating or reset.
@@ -183,10 +211,11 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
         );
     }
 
-    /// @notice Current LP capacity. External deployment, losses and withdrawals are not enabled.
+    /// @notice Current LP capacity after fees and finalized LP losses.
     /// @dev Collateral, reserve, protocol fees and direct token donations are NOT LP assets.
     function poolCapacity() public view returns (uint256) {
-        return totalLpPrincipal + totalLpFees;
+        uint256 withdrawalPaid = _lpWithdrawals[_pendingWithdrawalLp].paid;
+        return Limits.remaining(totalLpPrincipal + totalLpFees, totalLpLoss + withdrawalPaid);
     }
 
     function poolCash() public view returns (uint256) {
@@ -231,13 +260,7 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
     function seedReserve(uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) nonReentrant {
         if (reserveSeeded) revert ReserveAlreadySeeded();
         if (amount != RESERVE_SEED) revert InvalidReserveSeedAmount(RESERVE_SEED, amount);
-        uint256 allowance = asset.allowance(msg.sender, address(this));
-        if (allowance < amount) revert InsufficientReserveSeedAllowance(allowance, amount);
-        uint256 beforeBalance = asset.balanceOf(address(this));
-        IERC20(address(asset)).safeTransferFrom(msg.sender, address(this), amount);
-        uint256 afterBalance = asset.balanceOf(address(this));
-        uint256 received = afterBalance >= beforeBalance ? afterBalance - beforeBalance : 0;
-        if (received != amount) revert UnexpectedTokenReceipt(amount, received);
+        _pullPoolPayment(msg.sender, amount, 2);
         reserveBalance += amount;
         reserveSeeded = true;
         emit ReserveSeeded(amount);
@@ -266,19 +289,7 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
         // No permit or nonce is consumed on business rejection.
         if (!_acceptAdvance(request, signature)) return false;
         (uint256 fee,,,) = quoteAdvanceFee(request.amount);
-        if (fee != 0) {
-            try IERC20Permit(address(asset))
-                .permit(
-                    request.issuer,
-                    address(this),
-                    fee,
-                    permitSignature.deadline,
-                    permitSignature.v,
-                    permitSignature.r,
-                    permitSignature.s
-                ) { }
-                catch { }
-        }
+        if (fee != 0) _tryPermit(request.issuer, fee, permitSignature);
         _issueAdvance(request);
         return true;
     }
@@ -330,13 +341,7 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
     }
 
     function _receiveAdvanceFee(address issuer, uint256 fee) private {
-        uint256 allowance = asset.allowance(issuer, address(this));
-        if (allowance < fee) revert InsufficientFeeAllowance(allowance, fee);
-        uint256 beforeBalance = asset.balanceOf(address(this));
-        IERC20(address(asset)).safeTransferFrom(issuer, address(this), fee);
-        uint256 afterBalance = asset.balanceOf(address(this));
-        uint256 received = afterBalance >= beforeBalance ? afterBalance - beforeBalance : 0;
-        if (received != fee) revert UnexpectedTokenReceipt(fee, received);
+        _pullPoolPayment(issuer, fee, 0);
     }
 
     function _payAdvance(address issuer, uint256 amount) private {
@@ -373,17 +378,7 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
         _consumeRepaymentAuthorization(request, signature);
         // A third party may already have relayed the permit. The independent repayment
         // signature and the exact allowance check remain mandatory when permit fails.
-        try IERC20Permit(address(asset))
-            .permit(
-                request.issuer,
-                address(this),
-                request.amount,
-                permitSignature.deadline,
-                permitSignature.v,
-                permitSignature.r,
-                permitSignature.s
-            ) { }
-            catch { }
+        _tryPermit(request.issuer, request.amount, permitSignature);
         _receiveRepayment(request.issuer, request.amount);
         _recordRepayment(request);
     }
@@ -410,7 +405,7 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
     ) private {
         Position storage position = _positions[request.refundKey];
         if (!position.exists) revert UnknownPosition(request.refundKey);
-        if (position.state != PositionState.Advanced) {
+        if (position.state != PositionState.Advanced && position.state != PositionState.Review) {
             revert InvalidRepaymentState(request.refundKey, position.state);
         }
         if (request.issuer != position.issuer) {
@@ -451,10 +446,199 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
         acquirerOutstanding[position.acquirerHash] -= request.amount;
         totalOutstanding -= request.amount;
 
+        _processPendingWithdrawals();
+
         uint256 required = poolCash() + totalCollateral + reserveBalance + protocolFees;
         uint256 actual = asset.balanceOf(address(this));
         if (actual < required) revert InsufficientAssetBacking(actual, required);
         emit AdvanceRepaid(request.refundKey, request.amount);
+    }
+
+    /// @notice Verifier marks a matured advance for review and records both overdue transitions.
+    function openReview(bytes32 refundKey, string calldata evidence)
+        external
+        onlyRole(VERIFIER_ROLE)
+        nonReentrant
+    {
+        Position storage position = _positions[refundKey];
+        if (!position.exists) revert UnknownPosition(refundKey);
+        if (position.state != PositionState.Advanced) {
+            revert InvalidReviewState(refundKey, position.state);
+        }
+        if (block.timestamp < position.maturity) {
+            revert PositionNotMatured(refundKey, position.maturity);
+        }
+        position.state = PositionState.Review;
+        emit MarkedOverdue(refundKey);
+        emit ReviewOpened(refundKey, evidence);
+    }
+
+    /// @notice Verifier finalizes one reviewed position or holds it behind the acquirer cap.
+    function finalizeCoveredLoss(bytes32 refundKey) external onlyRole(VERIFIER_ROLE) nonReentrant {
+        Position storage position = _positions[refundKey];
+        if (!position.exists) revert UnknownPosition(refundKey);
+        if (position.state != PositionState.Review) {
+            revert InvalidLossState(refundKey, position.state);
+        }
+
+        bytes32 acquirerHash = position.acquirerHash;
+        _rememberEventPosition(acquirerHash, refundKey, position.issuer);
+        uint256 cap = Waterfall.eventCap(totalLpPrincipal);
+        uint256 recognized = eventRecognizedCoverage[acquirerHash];
+        if (!Waterfall.applyCap(recognized, position.poolCoverage, cap)) {
+            position.state = PositionState.CapHeld;
+            emit LossCapTriggered(acquirerHash, cap);
+            return;
+        }
+
+        Waterfall.Allocation memory allocation =
+            Waterfall.absorb(position.amount, collateralOf[position.issuer], reserveBalance);
+        _applyCoveredLoss(position, allocation);
+        eventRecognizedCoverage[acquirerHash] += position.poolCoverage;
+        emit CoveredLossFinalized(refundKey, position.poolCoverage);
+    }
+
+    /// @notice Verifier deposits recovered tokens and settles all positions in one acquirer event.
+    function recordRecovery(bytes32 refundKey, uint256 recovered)
+        external
+        onlyRole(VERIFIER_ROLE)
+        nonReentrant
+    {
+        Position storage anchor = _positions[refundKey];
+        if (!anchor.exists) revert UnknownPosition(refundKey);
+        bytes32 acquirerHash = anchor.acquirerHash;
+        if (anchor.state != PositionState.CoveredLoss && anchor.state != PositionState.CapHeld) {
+            revert InvalidLossState(refundKey, anchor.state);
+        }
+
+        uint256 count = _eventPositions[acquirerHash].length;
+        if (count == 0) revert UnknownRecoveryEvent(refundKey);
+        Waterfall.RecoverySettlement memory settlement =
+            _settlementForEvent(acquirerHash, recovered);
+        _receiveRecovery(recovered);
+        _reconcileEventCollateral(acquirerHash, settlement);
+
+        if (settlement.lpRestored > 0) {
+            totalLpLoss -= settlement.lpRestored;
+            unchecked {
+                totalLoss -= settlement.lpRestored;
+            }
+        }
+        totalLpLoss += settlement.lpApplied;
+        unchecked {
+            totalLoss += settlement.lpApplied;
+        }
+        if (settlement.reserveRestored > 0) {
+            reserveBalance += settlement.reserveRestored;
+            unchecked {
+                totalLoss -= settlement.reserveRestored;
+            }
+        }
+        if (settlement.reserveApplied > 0) {
+            reserveBalance -= settlement.reserveApplied;
+            unchecked {
+                totalLoss += settlement.reserveApplied;
+            }
+        }
+
+        for (uint256 i; i < count; ++i) {
+            bytes32 key = _eventPositions[acquirerHash][i];
+            Position storage position = _positions[key];
+            if (position.state == PositionState.CapHeld) {
+                issuerOutstanding[position.issuer] -= position.amount;
+                acquirerOutstanding[acquirerHash] -= position.amount;
+                totalOutstanding -= position.amount;
+            }
+            position.state = PositionState.RecoveryRecorded;
+        }
+        eventRecognizedCoverage[acquirerHash] = 0;
+        address issuer = _eventAccounting[acquirerHash].issuer;
+        if (collateralOf[issuer] == 0) emit IssuerSuspended(issuer);
+        delete _eventPositions[acquirerHash];
+        delete _eventAccounting[acquirerHash];
+        uint256 required = poolCash() + totalCollateral + reserveBalance + protocolFees;
+        uint256 actual = asset.balanceOf(address(this));
+        if (actual < required) revert InsufficientAssetBacking(actual, required);
+        emit RecoveryRecorded(refundKey, recovered);
+    }
+
+    function _settlementForEvent(bytes32 acquirerHash, uint256 recovered)
+        private
+        view
+        returns (Waterfall.RecoverySettlement memory settlement)
+    {
+        EventAccounting memory totals = _eventAccounting[acquirerHash];
+        return Waterfall.settleRecovery(
+            Waterfall.RecoveryInput({
+                principal: totals.principal,
+                totalMargin: totals.totalMargin,
+                recovered: recovered,
+                collateralAvailable: collateralOf[_eventAccounting[acquirerHash].issuer],
+                priorMarginApplied: totals.priorMarginApplied,
+                recognizedReserve: totals.recognizedReserve,
+                recognizedLp: totals.recognizedLp,
+                reserveAvailable: reserveBalance
+            })
+        );
+    }
+
+    function _rememberEventPosition(bytes32 acquirerHash, bytes32 refundKey, address issuer)
+        private
+    {
+        address knownIssuer = _eventAccounting[acquirerHash].issuer;
+        if (knownIssuer != address(0) && knownIssuer != issuer) {
+            revert EventIssuerMismatch(knownIssuer, issuer);
+        }
+        _eventPositions[acquirerHash].push(refundKey);
+        EventAccounting storage totals = _eventAccounting[acquirerHash];
+        totals.issuer = issuer;
+        Position storage position = _positions[refundKey];
+        totals.principal += position.amount;
+        totals.totalMargin += position.issuerMargin;
+    }
+
+    function _applyCoveredLoss(Position storage position, Waterfall.Allocation memory allocation)
+        private
+    {
+        collateralOf[position.issuer] -= allocation.marginApplied;
+        totalCollateral -= allocation.marginApplied;
+        reserveBalance -= allocation.reserveApplied;
+        totalLpLoss += allocation.lpApplied;
+        unchecked {
+            totalLoss += allocation.marginApplied + allocation.reserveApplied + allocation.lpApplied;
+        }
+        EventAccounting storage totals = _eventAccounting[position.acquirerHash];
+        totals.priorMarginApplied += allocation.marginApplied;
+        totals.recognizedReserve += allocation.reserveApplied;
+        totals.recognizedLp += allocation.lpApplied;
+        position.state = PositionState.CoveredLoss;
+        issuerOutstanding[position.issuer] -= position.amount;
+        acquirerOutstanding[position.acquirerHash] -= position.amount;
+        totalOutstanding -= position.amount;
+    }
+
+    function _reconcileEventCollateral(
+        bytes32 acquirerHash,
+        Waterfall.RecoverySettlement memory settlement
+    ) private {
+        uint256 priorMarginApplied = _eventAccounting[acquirerHash].priorMarginApplied;
+        address issuer = _eventAccounting[acquirerHash].issuer;
+        if (settlement.marginApplied > priorMarginApplied) {
+            uint256 additional = settlement.marginApplied - priorMarginApplied;
+            collateralOf[issuer] -= additional;
+            totalCollateral -= additional;
+        } else if (priorMarginApplied > settlement.marginApplied) {
+            uint256 restored = priorMarginApplied - settlement.marginApplied;
+            collateralOf[issuer] += restored;
+            totalCollateral += restored;
+        }
+    }
+
+    function _receiveRecovery(uint256 amount) private {
+        if (amount == 0) return;
+        uint256 allowance = asset.allowance(msg.sender, address(this));
+        if (allowance < amount) revert InsufficientRecoveryAllowance(allowance, amount);
+        IERC20(address(asset)).safeTransferFrom(msg.sender, address(this), amount);
     }
 
     /// @dev Business rejections retain the PRD event codes; malformed signed input reverts.
@@ -525,18 +709,25 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
         _consumeCollateralAuthorization(request, signature);
         // A third party may have relayed this permit already. The signed action remains required,
         // and _receiveCollateral checks allowance even when permit fails.
+        _tryPermit(request.issuer, request.amount, permitSignature);
+        _receiveCollateral(request.issuer, request.amount);
+    }
+
+    /// @dev Permit is best-effort; the signed action and allowance checks remain mandatory.
+    function _tryPermit(address owner, uint256 value, PermitSignature calldata permitSignature)
+        private
+    {
         try IERC20Permit(address(asset))
             .permit(
-                request.issuer,
+                owner,
                 address(this),
-                request.amount,
+                value,
                 permitSignature.deadline,
                 permitSignature.v,
                 permitSignature.r,
                 permitSignature.s
             ) { }
             catch { }
-        _receiveCollateral(request.issuer, request.amount);
     }
 
     /// @notice Digest for an issuer's collateral action, using the Torna EIP-712 domain.
@@ -575,17 +766,25 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
     }
 
     function _receiveCollateral(address issuer, uint256 amount) private {
-        uint256 allowance = asset.allowance(issuer, address(this));
-        if (allowance < amount) revert InsufficientCollateralAllowance(allowance, amount);
-        uint256 balanceBefore = asset.balanceOf(address(this));
-        IERC20(address(asset)).safeTransferFrom(issuer, address(this), amount);
-        uint256 balanceAfter = asset.balanceOf(address(this));
-        uint256 received = balanceAfter >= balanceBefore ? balanceAfter - balanceBefore : 0;
-        if (received != amount) revert UnexpectedTokenReceipt(amount, received);
+        _pullPoolPayment(issuer, amount, 1);
         // Credit only the token owner, only after exact receipt. LP principal is separate.
         collateralOf[issuer] += amount;
         totalCollateral += amount;
         emit CollateralDeposited(issuer, amount);
+    }
+
+    function _pullPoolPayment(address payer, uint256 amount, uint8 kind) private {
+        uint256 allowance = asset.allowance(payer, address(this));
+        if (allowance < amount) {
+            if (kind == 0) revert InsufficientFeeAllowance(allowance, amount);
+            if (kind == 1) revert InsufficientCollateralAllowance(allowance, amount);
+            revert InsufficientReserveSeedAllowance(allowance, amount);
+        }
+        uint256 beforeBalance = asset.balanceOf(address(this));
+        IERC20(address(asset)).safeTransferFrom(payer, address(this), amount);
+        uint256 afterBalance = asset.balanceOf(address(this));
+        uint256 received = afterBalance >= beforeBalance ? afterBalance - beforeBalance : 0;
+        if (received != amount) revert UnexpectedTokenReceipt(amount, received);
     }
 
     /// @notice Fix LP-01/02/03 before funding. No replacement or reopening, even by admin.
@@ -672,6 +871,76 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
     /// @notice Maximum additional principal currently accepted for one LP under both PRD caps.
     function liquidityDepositRoom(address lp) public view returns (uint256) {
         return Limits.depositRoom(totalLpPrincipal, lpPrincipal[lp], totalOutstanding);
+    }
+
+    /// @notice Request an LP exit; any cash-constrained remainder is paid after repayment.
+    /// @dev The request snapshots the LP's proportional fee and current-loss shares.
+    function requestWithdraw(uint256 principal)
+        external
+        whenLiquidityReady
+        nonReentrant
+        returns (uint256 immediate, uint256 pending)
+    {
+        uint256 available = lpPrincipal[msg.sender];
+        if (principal == 0 || principal > available) {
+            revert();
+        }
+        uint256 claimNav = Math.mulDiv(poolCapacity(), principal, totalLpPrincipal);
+        uint256 cashShare = Math.mulDiv(poolCash(), principal, totalLpPrincipal);
+        immediate = Math.min(claimNav, cashShare);
+        unchecked {
+            pending = claimNav - immediate;
+        }
+
+        LpWithdrawal storage existing = _lpWithdrawals[msg.sender];
+        existing.principal = principal;
+        existing.paid = immediate;
+        existing.pending = pending;
+        emit WithdrawRequested(msg.sender, principal);
+
+        _payAdvance(msg.sender, immediate);
+        if (immediate > 0) emit WithdrawPaid(msg.sender, immediate);
+        if (pending > 0) {
+            if (_pendingWithdrawalLp != address(0)) {
+                revert();
+            }
+            _pendingWithdrawalLp = msg.sender;
+        } else {
+            _completeWithdrawal(msg.sender);
+        }
+    }
+
+    function _processPendingWithdrawals() private {
+        address lp = _pendingWithdrawalLp;
+        if (lp == address(0)) return;
+        LpWithdrawal storage withdrawal = _lpWithdrawals[lp];
+        if (poolCash() < withdrawal.pending) {
+            return;
+        }
+        uint256 payment = withdrawal.pending;
+        unchecked {
+            withdrawal.pending = 0;
+            withdrawal.paid += payment;
+        }
+        _payAdvance(lp, payment);
+        emit WithdrawPaid(lp, payment);
+        _completeWithdrawal(lp);
+    }
+
+    function _completeWithdrawal(address lp) private {
+        LpWithdrawal memory withdrawal = _lpWithdrawals[lp];
+        uint256 feeShare = Math.mulDiv(totalLpFees, withdrawal.principal, totalLpPrincipal);
+        uint256 lossShare = Math.mulDiv(totalLpLoss, withdrawal.principal, totalLpPrincipal);
+        unchecked {
+            lpPrincipal[lp] -= withdrawal.principal;
+            totalLpPrincipal -= withdrawal.principal;
+            totalLpFees -= feeShare;
+            totalLpLoss -= lossShare;
+            totalLoss -= lossShare;
+        }
+        _pendingWithdrawalLp = address(0);
+        delete _lpWithdrawals[lp];
+        emit WithdrawCompleted(lp, withdrawal.principal);
     }
 
     function _depositRejectionReason(address lp) private view returns (DepositRejection) {
