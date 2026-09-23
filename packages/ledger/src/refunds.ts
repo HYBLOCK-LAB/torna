@@ -9,10 +9,12 @@ export interface LedgerRefund extends RefundRow {
   status: string;
   position_state: PositionState | null;
   timepoint: string | null;
+  maturity_override_seconds: number | null;
 }
 
 const COLUMNS = `refund_id, refund_key, issuer_id, acquirer_id, cardholder_id,
-  amount::text as amount, confirmed_at, status, position_state, timepoint`;
+  amount::text as amount, confirmed_at, status, position_state, timepoint,
+  maturity_override_seconds`;
 
 export async function getRefund(sql: Sql, refundId: string): Promise<LedgerRefund | null> {
   const rows = await sql.unsafe<LedgerRefund[]>(`select ${COLUMNS} from public.refunds where refund_id = $1`, [refundId]);

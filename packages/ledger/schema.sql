@@ -103,6 +103,12 @@ create table public.refunds (
                   )),
   advance_tx_hash text
                   check (advance_tx_hash ~ '^0x[0-9a-f]{64}$'),
+  -- Scenario rows whose maturity must pass during the run (t1/t2 review,
+  -- t3 correlated loss, t5 late repayment). The adapter then signs
+  -- maturity = chain time + this many seconds instead of 5 business days,
+  -- and the runner waits it out. null = normal maturity.
+  maturity_override_seconds integer
+                  check (maturity_override_seconds > 0),
   created_at      timestamptz not null default now()
 );
 

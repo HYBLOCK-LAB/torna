@@ -39,25 +39,38 @@ test('business days skip weekends (UTC)', () => {
   assert.equal(addBusinessDays(mon, 5), toUnixSeconds('2026-09-21T10:22:00Z'));
 });
 
-test('maturity counts from max(confirmed_at, chain time) so it is always in the future', () => {
+test('maturity is counted from chain time, never from confirmed_at', () => {
   const chain = toUnixSeconds('2026-09-25T00:00:00Z'); // Friday
-  // historical seed row (2025): counted from chain time
-  assert.equal(computeMaturity('2025-09-14T09:00:00Z', chain), toUnixSeconds('2026-10-02T00:00:00Z'));
-  // fresh refund confirmed after chain time: spec rule confirmed_at + 5 business days
-  assert.equal(computeMaturity('2026-09-28T10:00:00Z', chain), toUnixSeconds('2026-10-05T10:00:00Z'));
-  assert.ok(computeMaturity('2025-01-01T00:00:00Z', chain) > chain);
+  assert.equal(computeMaturity(chain), toUnixSeconds('2026-10-02T00:00:00Z'));
+  // A 2025 confirmed_at cannot shorten or lengthen it: it is not an input.
+  assert.ok(computeMaturity(chain) > chain);
+});
+
+test('scenario rows use their short maturity override', () => {
+  const chain = toUnixSeconds('2026-09-25T00:00:00Z');
+  assert.equal(computeMaturity(chain, 120), chain + 120n);
+  assert.equal(computeMaturity(chain, null), computeMaturity(chain));
+  for (const bad of [0, -120, 1.5]) {
+    assert.throws(() => computeMaturity(chain, bad), RangeError, String(bad));
+  }
 });
 
 test('spec 10.6 example row -> adapter output', () => {
   const chain = toUnixSeconds('2026-09-14T10:30:00Z');
-  const req = buildAdvanceRequest(
-    { refund_id: 'REF-2026-001', issuer_id: 'HYBRID', acquirer_id: 'ACQ-α', amount: '1000.00', confirmed_at: new Date('2026-09-14T10:22:00Z') },
-    { issuer: '0x3333333333333333333333333333333333333333', nonce: 7n, chainNow: chain },
-  );
+  const row = {
+    refund_id: 'REF-2026-001', issuer_id: 'HYBRID', acquirer_id: 'ACQ-α',
+    amount: '1000.00', confirmed_at: new Date('2026-09-14T10:22:00Z'),
+  };
+  const input = { issuer: '0x3333333333333333333333333333333333333333' as const, nonce: 7n, chainNow: chain };
+  const req = buildAdvanceRequest(row, input);
   assert.equal(req.refundKey, '0x0e56a8cdd31615a3cd9121754dce145c7713c54b328055d069d6b604089c97c5');
   assert.equal(req.acquirerHash, '0xb458d4d1175f4890b44d8164de0a594387b811b3296fa604f5270258903aaf44');
   assert.equal(req.amount, 1_000_000_000n);
   assert.equal(req.nonce, 7n);
   assert.equal(req.deadline, chain + 600n);
-  assert.equal(req.maturity, toUnixSeconds('2026-09-21T10:30:00Z'));
+  assert.equal(req.maturity, toUnixSeconds('2026-09-21T10:30:00Z')); // chain time + 5 business days
+
+  // A scenario row matures two minutes after it is advanced.
+  const short = buildAdvanceRequest({ ...row, maturity_override_seconds: 120 }, input);
+  assert.equal(short.maturity, chain + 120n);
 });

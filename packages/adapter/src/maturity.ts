@@ -1,14 +1,14 @@
 /**
  * Maturity for an AdvanceRequest.
  *
- * Spec 10.6: maturity = confirmed_at + 5 business days.
- * Contract: a non-future maturity REVERTS (shared/abi/README.md, advance submission).
+ * Team decision (2026-09-22, Seojin): count from CHAIN TIME, not confirmed_at.
+ * The one-year seed is replayed now rather than uploaded as history, and the
+ * contract reverts a non-future maturity, so confirmed_at can never produce a
+ * usable maturity. confirmed_at stays in the DB as the card-ledger record.
  *
- * ASSUMPTION (pending Minseo's answer, 2026-09-22): the one-year seed has
- * confirmed_at in 2025, so confirmed_at + 5 business days is in the past for
- * almost every refund. We therefore count 5 business days from
- * max(confirmed_at, chain time). For a fresh refund this equals the spec rule;
- * for a historical one it matches the t0 runner, which uses chain time.
+ * Scenario refunds that must mature during the run (t1/t2 review, t3 correlated
+ * loss, t5 late repayment) carry refunds.maturity_override_seconds (120), so the
+ * runner can wait out the maturity instead of an admin forcing the state.
  */
 export const BUSINESS_DAYS_TO_MATURITY = 5;
 const DAY = 86_400n;
@@ -33,8 +33,16 @@ export function toUnixSeconds(value: Date | string): bigint {
   return BigInt(Math.floor(ms / 1000));
 }
 
-export function computeMaturity(confirmedAt: Date | string, chainNow: bigint): bigint {
-  const confirmed = toUnixSeconds(confirmedAt);
-  const base = confirmed > chainNow ? confirmed : chainNow;
-  return addBusinessDays(base, BUSINESS_DAYS_TO_MATURITY);
+/**
+ * chain time + 5 business days, or chain time + overrideSeconds when the
+ * refund row sets one. Always strictly in the future.
+ */
+export function computeMaturity(chainNow: bigint, overrideSeconds?: number | null): bigint {
+  if (overrideSeconds === undefined || overrideSeconds === null) {
+    return addBusinessDays(chainNow, BUSINESS_DAYS_TO_MATURITY);
+  }
+  if (!Number.isInteger(overrideSeconds) || overrideSeconds <= 0) {
+    throw new RangeError(`maturity_override_seconds must be a positive integer, got ${overrideSeconds}`);
+  }
+  return chainNow + BigInt(overrideSeconds);
 }

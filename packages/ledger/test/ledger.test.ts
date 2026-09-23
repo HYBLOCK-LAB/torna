@@ -23,6 +23,17 @@ test('reset: 378 refunds, all refund_key filled with the adapter hash', { skip }
   const r = await getRefund(sql, 'REF-2026-001');
   assert.equal(r?.refund_key, refundKeyOf('REF-2026-001'));
   assert.equal(r?.amount, '1000.00');
+  assert.equal(r?.maturity_override_seconds, null);
+});
+
+test('the six scenario refunds carry the 120s maturity override', { skip }, async () => {
+  const [{ ids }] = await sql<{ ids: string[] }[]>`
+    select array_agg(refund_id order by refund_id) as ids
+      from public.refunds where maturity_override_seconds = 120`;
+  assert.deepEqual(ids, [
+    'REF-2026-014', 'REF-2026-021', 'REF-2026-031',
+    'REF-2026-032', 'REF-2026-033', 'REF-2026-034',
+  ]);
 });
 
 test('creditLedger is idempotent: 300 -> 1300 once (t7)', { skip }, async () => {
