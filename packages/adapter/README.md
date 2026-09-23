@@ -7,7 +7,7 @@
 ```
 refundId, acquirerId      →  keccak256(UTF-8 바이트)            src/hash.ts
 금액 "1000.00"              →  1000000000n (6자리, 여기서 한 번만)   src/amount.ts
-만기                        →  max(confirmed_at, 체인 시각) + 영업일 5일   src/maturity.ts
+만기                        →  체인 시각 + 영업일 5일 (시나리오 건은 override)  src/maturity.ts
 nonce · deadline · chainId  →  advanceNonces(issuer), 체인 시각 + 10분   src/request.ts
 EIP-712 서명 + 수수료 Permit   →  shared/abi 타입 import                src/sign.ts
 제출 → AdvanceIssued 로그 확인                                        src/chain.ts
@@ -53,9 +53,14 @@ pnpm --filter @torna/adapter typecheck
 
 로컬 anvil 미니 통합은 `packages/ledger/scripts/mini-integration.ts` 에 있습니다.
 
+## 만기 규칙 (2026-09-23 확정)
+
+만기는 **체인 시각 + 영업일 5일**입니다. 확정일(`confirmed_at`)은 원장 기록으로만 쓰고 만기 계산에 넣지 않습니다. 1년치 시드를 지금 시점으로 다시 돌리는 구조라 확정일 기준 만기는 항상 과거가 되고, 과거 만기는 컨트랙트에서 revert되기 때문입니다.
+
+실행 중에 만기가 지나야 하는 6건(`REF-2026-021`, `031`~`034`, `014`)은 `refunds.maturity_override_seconds` 에 **120**이 들어 있고, 어댑터는 그 건만 **체인 시각 + 120초**로 서명합니다. 실행 스크립트가 t1 · t3 · t5 직전에 2분씩 기다리면 관리자가 상태를 강제로 넘기지 않고도 연체 → 검토 경로가 성립합니다.
+
 ## 가정 (확인 대기)
 
-- **만기:** 시드 1년치는 확정일이 2025년이라 "확정일 + 영업일 5일"이 과거가 되고, 과거 만기는 컨트랙트에서 revert됩니다. 그래서 `max(확정일, 체인 시각)` 기준으로 영업일 5일을 셉니다. 민서님 답에 따라 `src/maturity.ts` 한 곳만 바꾸면 됩니다.
 - 거절 코드 4(ChainMismatch)는 컨트랙트가 내지 않습니다. 다른 체인용 서명은 3(InvalidSignature)으로 나옵니다.
 
 ## 하지 말아야 할 것

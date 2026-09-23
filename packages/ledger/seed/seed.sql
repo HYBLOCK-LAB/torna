@@ -22,6 +22,9 @@
 --   t3   031 032 033 034   AURA   / ACQ-β   correlated loss
 --   t4   170 171 172 173   HYBRID / ACQ-α   LP withdrawal
 --   t5   014               HYBRID / ACQ-α   late but repaid
+--
+-- 021, 031..034 and 014 carry maturity_override_seconds = 120: their maturity
+-- has to pass during the run (2026-09-23 team decision).
 --   t8   045               HYBRID / ACQ-α   signed for another chain -> rejected
 --   t9   210               NOVA     / ACQ-γ
 --   t9   211               MERIDIAN / ACQ-δ
@@ -71,25 +74,30 @@ create temporary table seed_refunds (
   n           int primary key,
   issuer_id   text not null,
   timepoint   text not null,
-  confirmed_at timestamptz not null
+  confirmed_at timestamptz not null,
+  maturity_override_seconds int
 ) on commit drop;
 
 -- Scenario refunds (fixed by the reference bundle)
-insert into seed_refunds (n, issuer_id, timepoint, confirmed_at) values
-  (  1, 'HYBRID',   't0', '2026-09-14T10:22:00Z'),   -- PRD 10.6
-  ( 21, 'HYBRID',   't1', '2026-09-13T10:00:00Z'),   -- last day of the year
-  ( 31, 'AURA',     't3', '2026-09-15T09:10:00Z'),
-  ( 32, 'AURA',     't3', '2026-09-15T09:20:00Z'),
-  ( 33, 'AURA',     't3', '2026-09-15T09:30:00Z'),
-  ( 34, 'AURA',     't3', '2026-09-15T09:40:00Z'),
-  (170, 'HYBRID',   't4', '2026-09-16T11:00:00Z'),
-  (171, 'HYBRID',   't4', '2026-09-16T11:10:00Z'),
-  (172, 'HYBRID',   't4', '2026-09-16T11:20:00Z'),
-  (173, 'HYBRID',   't4', '2026-09-16T11:30:00Z'),
-  ( 14, 'HYBRID',   't5', '2026-09-17T13:00:00Z'),
-  ( 45, 'HYBRID',   't8', '2026-09-18T15:00:00Z'),
-  (210, 'NOVA',     't9', '2026-09-19T08:00:00Z'),
-  (211, 'MERIDIAN', 't9', '2026-09-19T08:30:00Z');
+-- maturity_override_seconds = 120 for the six refunds whose maturity must pass
+-- during the run: 021 (t1 review -> t2 covered loss), 031..034 (t3 correlated
+-- loss), 014 (t5 late repayment). The runner waits 2 minutes before those
+-- timepoints instead of an admin forcing the state.
+insert into seed_refunds (n, issuer_id, timepoint, confirmed_at, maturity_override_seconds) values
+  (  1, 'HYBRID',   't0', '2026-09-14T10:22:00Z', null),   -- PROJECT_SPEC 10.6
+  ( 21, 'HYBRID',   't1', '2026-09-13T10:00:00Z', 120),    -- last day of the year
+  ( 31, 'AURA',     't3', '2026-09-15T09:10:00Z', 120),
+  ( 32, 'AURA',     't3', '2026-09-15T09:20:00Z', 120),
+  ( 33, 'AURA',     't3', '2026-09-15T09:30:00Z', 120),
+  ( 34, 'AURA',     't3', '2026-09-15T09:40:00Z', 120),
+  (170, 'HYBRID',   't4', '2026-09-16T11:00:00Z', null),
+  (171, 'HYBRID',   't4', '2026-09-16T11:10:00Z', null),
+  (172, 'HYBRID',   't4', '2026-09-16T11:20:00Z', null),
+  (173, 'HYBRID',   't4', '2026-09-16T11:30:00Z', null),
+  ( 14, 'HYBRID',   't5', '2026-09-17T13:00:00Z', 120),
+  ( 45, 'HYBRID',   't8', '2026-09-18T15:00:00Z', null),
+  (210, 'NOVA',     't9', '2026-09-19T08:00:00Z', null),
+  (211, 'MERIDIAN', 't9', '2026-09-19T08:30:00Z', null);
 
 -- One year of normal operation: 364 closed refunds, one per day from
 -- 2025-09-14 (the 365th is REF-2026-021 above). Numbers 002..378 that are
@@ -105,7 +113,8 @@ from generate_series(2, 378) as n
 where n not in (select n from seed_refunds);
 
 insert into public.refunds
-  (refund_id, issuer_id, acquirer_id, cardholder_id, amount, confirmed_at, status, timepoint)
+  (refund_id, issuer_id, acquirer_id, cardholder_id, amount, confirmed_at, status, timepoint,
+   maturity_override_seconds)
 select format('REF-2026-%s', lpad(s.n::text, 3, '0')),
        s.issuer_id,
        i.acquirer_id,
@@ -123,7 +132,8 @@ select format('REF-2026-%s', lpad(s.n::text, 3, '0')),
        1000.00,
        s.confirmed_at,
        'confirmed',
-       s.timepoint
+       s.timepoint,
+       s.maturity_override_seconds
 from seed_refunds s
 join public.issuers i on i.key = s.issuer_id
 order by s.n;
@@ -187,6 +197,9 @@ begin
 
   select count(*) into v from public.refunds where cancel_tx_id is null or cardholder_id is null;
   if v <> 0 then raise exception '% refunds without cardholder or cancellation', v; end if;
+
+  select count(*) into v from public.refunds where maturity_override_seconds = 120;
+  if v <> 6 then raise exception 'short-maturity refunds: expected 6, got %', v; end if;
 
   select count(*) into v from public.transactions;
   if v <> 378 * 2 then raise exception 'transactions: expected 756, got %', v; end if;

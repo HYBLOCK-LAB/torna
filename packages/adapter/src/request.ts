@@ -14,7 +14,13 @@ export interface RefundRow {
   acquirer_id: string;
   /** numeric(14,2) as returned by Postgres, e.g. "1000.00". */
   amount: string;
+  /** Card-ledger record only; maturity is counted from chain time. */
   confirmed_at: Date | string;
+  /**
+   * Scenario rows that must mature during the run carry a short maturity in
+   * seconds (120). null/undefined means the normal 5 business days.
+   */
+  maturity_override_seconds?: number | null;
 }
 
 export const DEFAULT_DEADLINE_SECONDS = 10n * 60n; // spec 10.6: now + 10 minutes
@@ -35,7 +41,7 @@ export function buildAdvanceRequest(row: RefundRow, input: AdvanceRequestInput):
     issuer: input.issuer,
     acquirerHash: acquirerHashOf(row.acquirer_id),
     amount: dbAmountToBaseUnits(row.amount),
-    maturity: computeMaturity(row.confirmed_at, input.chainNow),
+    maturity: computeMaturity(input.chainNow, row.maturity_override_seconds),
     nonce: input.nonce,
     deadline: input.chainNow + (input.deadlineSeconds ?? DEFAULT_DEADLINE_SECONDS),
   };
