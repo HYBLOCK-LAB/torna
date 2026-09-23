@@ -38,3 +38,27 @@ acquirers        매입사             acquirer_id · display_name
 그래서 심사 중 Supabase가 멈춰도 데모는 돕니다.
 
 자세한 내용은 `PROJECT_SPEC.md` 13장.
+
+## 사용법
+
+```bash
+set -a; source .env; set +a                       # DATABASE_URL
+psql "$DATABASE_URL" -f packages/ledger/schema.sql          # 테이블 생성 (기존 데이터 삭제)
+psql "$DATABASE_URL" -f packages/ledger/seed/seed.sql       # 378건 시드
+pnpm --filter @torna/ledger fill-refund-keys                # refund_key 채우기 (어댑터 해시 사용)
+RUN_ID=run-20260925 pnpm --filter @torna/ledger dump-labels # shared/labels/<RUN_ID>.json
+```
+
+`pnpm --filter @torna/ledger reset` 은 위 앞의 세 단계를 한 번에 합니다 (**전체 삭제 후 재생성**).
+
+코드에서 (B·민서 실행기):
+
+```ts
+import { connect, resetLedger, getRefund, creditLedger, setPositionState, buildLabelMap } from '@torna/ledger';
+const sql = connect();                                   // DATABASE_URL
+await resetLedger(sql);                                  // 실행 전 초기화 (spec 15장 2단계)
+await creditLedger(sql, refundKey, '1000.00', txHash);   // true = 반영, false = 이미 반영됨 (멱등)
+```
+
+- 테스트: `TEST_DATABASE_URL=<로컬 버림용 Postgres> pnpm --filter @torna/ledger test` (Supabase 주소면 실행을 거부합니다)
+- 미니 통합(로컬 anvil + 로컬 Postgres): `scripts/mini-integration.ts` 상단 주석 참고
