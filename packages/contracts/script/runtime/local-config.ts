@@ -11,9 +11,15 @@ export interface LocalT0SigningAccounts {
   submitter: SigningAccount;
   hybridIssuer: SigningAccount;
   auraIssuer: SigningAccount;
+  novaIssuer: SigningAccount;
+  meridianIssuer: SigningAccount;
+  kiteIssuer: SigningAccount;
   lp01: SigningAccount;
   lp02: SigningAccount;
   lp03: SigningAccount;
+  lp04: SigningAccount;
+  lp05: SigningAccount;
+  lp06: SigningAccount;
 }
 
 /**
@@ -84,9 +90,15 @@ export function publicActors(accounts: LocalT0SigningAccounts): LocalT0Actors {
     submitter: accounts.submitter.address,
     hybridIssuer: accounts.hybridIssuer.address,
     auraIssuer: accounts.auraIssuer.address,
+    novaIssuer: accounts.novaIssuer.address,
+    meridianIssuer: accounts.meridianIssuer.address,
+    kiteIssuer: accounts.kiteIssuer.address,
     lp01: accounts.lp01.address,
     lp02: accounts.lp02.address,
     lp03: accounts.lp03.address,
+    lp04: accounts.lp04.address,
+    lp05: accounts.lp05.address,
+    lp06: accounts.lp06.address,
   };
 }
 
@@ -110,9 +122,15 @@ export function loadLocalT0Config(
     submitter: accountAt(mnemonic, 2),
     hybridIssuer: accountAt(mnemonic, 3),
     auraIssuer: accountAt(mnemonic, 4),
+    novaIssuer: accountAt(mnemonic, 5),
+    meridianIssuer: accountAt(mnemonic, 6),
+    kiteIssuer: accountAt(mnemonic, 7),
     lp01: accountAt(mnemonic, 8),
     lp02: accountAt(mnemonic, 9),
     lp03: accountAt(mnemonic, 10),
+    lp04: accountAt(mnemonic, 11),
+    lp05: accountAt(mnemonic, 12),
+    lp06: accountAt(mnemonic, 13),
   } satisfies LocalT0SigningAccounts;
   return { rpcUrl, chainId, runId, accounts };
 }

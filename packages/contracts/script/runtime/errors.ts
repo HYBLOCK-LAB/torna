@@ -37,7 +37,7 @@ export class SnapshotMetricUnavailableError extends Error {
 
 export class FullScenarioNotImplementedError extends Error {
   constructor() {
-    super('Only the local t0 flow is wired. The full 13-timepoint runner remains unavailable.');
+    super('Local handlers are wired through t5. The full 13-timepoint runner remains unavailable.');
     this.name = 'FullScenarioNotImplementedError';
   }
 }

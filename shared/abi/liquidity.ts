@@ -15,4 +15,8 @@ export const liquidityAbi = [
     inputs: [{ name: 'principal', type: 'uint256' }],
     outputs: [{ name: 'immediate', type: 'uint256' }, { name: 'pending', type: 'uint256' }],
   },
+  {
+    type: 'function', name: 'processWithdrawal', stateMutability: 'nonpayable',
+    inputs: [], outputs: [],
+  },
 ] as const;

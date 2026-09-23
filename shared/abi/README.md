@@ -29,9 +29,10 @@ AdvanceIssued or AdvanceRejected, full repayment emits AdvanceRepaid, and post-b
 LP deposits emit LiquidityDeposited plus DepositRejected for an unaccepted remainder.
 Loss execution now emits MarkedOverdue/ReviewOpened, CoveredLossFinalized or
 LossCapTriggered, and RecoveryRecorded through the verifier-only review/cap/recovery API.
-Partial repayment is still pending. LP withdrawal uses `requestWithdraw(principal)`:
-the immediate payment is `min(NAV × share, cash × share)` and any remainder is paid
-automatically after repayment. Completion removes the LP's proportional principal, fee
+Partial repayment is still pending. LP withdrawal uses `requestWithdraw(principal)` to record
+the immediate quote `min(NAV × share, cash × share)` without changing the request-only
+t4 snapshot. Permissionless `processWithdrawal()` transfers that quote; any remainder is paid
+automatically by a later repayment. Completion removes the LP's proportional principal, fee
 share and current LP-loss share.
 D01 also adds InitialLiquidityConfigured(address[3]) and
 InitialLiquidityCompleted(uint256) setup events in the compiled artifact; they are
@@ -246,9 +247,10 @@ Deadline equality is accepted. Malformed signatures return reason 3 without ECDS
 Queries: `positionOf`, `issuerLimit`, `issuerStateOf`, `advanceNonces`,
 `issuerOutstanding`, `acquirerOutstanding`, `totalOutstanding`, `poolCapacity`,
 `poolCash`, `totalLpFees`, `reserveBalance`, `protocolFees`, `totalAdvanceCount`,
-`totalAdvanced`, `totalLpLoss`, `totalLoss`, `registeredIssuerCount`. The withdrawal call
-returns its immediate and pending amounts; the active request is also represented by
-the withdrawal events. Position `exists` is separate from enum zero;
+`totalAdvanced`, `totalLpLoss`, `totalLoss`, `registeredIssuerCount`. The withdrawal request
+returns its immediate and pending amounts; `processWithdrawal()` performs the quoted immediate
+transfer and the active request is also represented by the withdrawal events. Position `exists`
+is separate from enum zero;
 unknown keys revert. Margin/coverage are frozen loss terms, not individually locked collateral.
 Count includes all registered issuers; suspension does not increase other issuers' limits.
 External deployment is not enabled yet. LP withdrawals and per-LP fee settlement are

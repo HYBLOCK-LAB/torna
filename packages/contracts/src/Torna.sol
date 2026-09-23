@@ -7,7 +7,6 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IERC20Permit } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { ECDSA } from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import { EIP712 } from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
@@ -178,11 +177,14 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
         if (acquirerHash == bytes32(0) || bytes(name).length == 0) revert InvalidIssuerMetadata();
         _issuerRegistrations[issuer] = IssuerRegistration({
             exists: true,
-            registeredAt: SafeCast.toUint64(block.timestamp),
+            registeredAt: uint64(block.timestamp),
             acquirerHash: acquirerHash,
             name: name
         });
-        registeredIssuerCount += 1;
+        // At most one registration exists per address, so this counter cannot reach uint256 max.
+        unchecked {
+            registeredIssuerCount += 1;
+        }
         emit IssuerRegistered(issuer, acquirerHash, name);
     }
 
@@ -310,9 +312,12 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
         if (actual < backing) revert InsufficientAssetBacking(actual, backing);
         (uint256 fee, uint256 lpFee, uint256 reserveFee, uint256 protocolFee) =
             quoteAdvanceFee(request.amount);
-        if (fee != 0) _receiveAdvanceFee(request.issuer, fee);
+        if (fee != 0) _pullPoolPayment(request.issuer, fee, 0);
 
-        advanceNonces[request.issuer] += 1;
+        unchecked {
+            advanceNonces[request.issuer] += 1;
+            totalAdvanceCount += 1;
+        }
         uint256 margin = Math.mulDiv(request.amount, 2000, 10_000);
         _positions[request.refundKey] = Position({
             exists: true,
@@ -332,16 +337,11 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
         totalLpFees += lpFee;
         reserveBalance += reserveFee;
         protocolFees += protocolFee;
-        totalAdvanceCount += 1;
         totalAdvanced += request.amount;
 
         // A failed payment reverts the fee transfer, permit, nonce, position and all accounting.
         _payAdvance(request.issuer, request.amount);
         emit AdvanceIssued(request.refundKey, request.issuer, request.amount, request.maturity);
-    }
-
-    function _receiveAdvanceFee(address issuer, uint256 fee) private {
-        _pullPoolPayment(issuer, fee, 0);
     }
 
     function _payAdvance(address issuer, uint256 amount) private {
@@ -446,7 +446,7 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
         acquirerOutstanding[position.acquirerHash] -= request.amount;
         totalOutstanding -= request.amount;
 
-        _processPendingWithdrawals();
+        _processPendingWithdrawals(true);
 
         uint256 required = poolCash() + totalCollateral + reserveBalance + protocolFees;
         uint256 actual = asset.balanceOf(address(this));
@@ -458,7 +458,6 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
     function openReview(bytes32 refundKey, string calldata evidence)
         external
         onlyRole(VERIFIER_ROLE)
-        nonReentrant
     {
         Position storage position = _positions[refundKey];
         if (!position.exists) revert UnknownPosition(refundKey);
@@ -474,7 +473,7 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
     }
 
     /// @notice Verifier finalizes one reviewed position or holds it behind the acquirer cap.
-    function finalizeCoveredLoss(bytes32 refundKey) external onlyRole(VERIFIER_ROLE) nonReentrant {
+    function finalizeCoveredLoss(bytes32 refundKey) external onlyRole(VERIFIER_ROLE) {
         Position storage position = _positions[refundKey];
         if (!position.exists) revert UnknownPosition(refundKey);
         if (position.state != PositionState.Review) {
@@ -515,30 +514,18 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
         if (count == 0) revert UnknownRecoveryEvent(refundKey);
         Waterfall.RecoverySettlement memory settlement =
             _settlementForEvent(acquirerHash, recovered);
+        EventAccounting memory eventTotals = _eventAccounting[acquirerHash];
+        uint256 previouslyRecognizedLoss = eventTotals.priorMarginApplied
+            + eventTotals.recognizedReserve + eventTotals.recognizedLp;
+        uint256 finalEventLoss = eventTotals.principal - recovered;
         _receiveRecovery(recovered);
         _reconcileEventCollateral(acquirerHash, settlement);
 
-        if (settlement.lpRestored > 0) {
-            totalLpLoss -= settlement.lpRestored;
-            unchecked {
-                totalLoss -= settlement.lpRestored;
-            }
-        }
-        totalLpLoss += settlement.lpApplied;
+        // Waterfall bounds restored/applied values by the recognized and available balances.
         unchecked {
-            totalLoss += settlement.lpApplied;
-        }
-        if (settlement.reserveRestored > 0) {
-            reserveBalance += settlement.reserveRestored;
-            unchecked {
-                totalLoss -= settlement.reserveRestored;
-            }
-        }
-        if (settlement.reserveApplied > 0) {
-            reserveBalance -= settlement.reserveApplied;
-            unchecked {
-                totalLoss += settlement.reserveApplied;
-            }
+            totalLpLoss = totalLpLoss + settlement.lpApplied - settlement.lpRestored;
+            reserveBalance = reserveBalance + settlement.reserveRestored - settlement.reserveApplied;
+            totalLoss = totalLoss - previouslyRecognizedLoss + finalEventLoss;
         }
 
         for (uint256 i; i < count; ++i) {
@@ -552,7 +539,7 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
             position.state = PositionState.RecoveryRecorded;
         }
         eventRecognizedCoverage[acquirerHash] = 0;
-        address issuer = _eventAccounting[acquirerHash].issuer;
+        address issuer = eventTotals.issuer;
         if (collateralOf[issuer] == 0) emit IssuerSuspended(issuer);
         delete _eventPositions[acquirerHash];
         delete _eventAccounting[acquirerHash];
@@ -573,7 +560,7 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
                 principal: totals.principal,
                 totalMargin: totals.totalMargin,
                 recovered: recovered,
-                collateralAvailable: collateralOf[_eventAccounting[acquirerHash].issuer],
+                collateralAvailable: collateralOf[totals.issuer],
                 priorMarginApplied: totals.priorMarginApplied,
                 recognizedReserve: totals.recognizedReserve,
                 recognizedLp: totals.recognizedLp,
@@ -878,7 +865,6 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
     function requestWithdraw(uint256 principal)
         external
         whenLiquidityReady
-        nonReentrant
         returns (uint256 immediate, uint256 pending)
     {
         uint256 available = lpPrincipal[msg.sender];
@@ -893,31 +879,48 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
         }
 
         LpWithdrawal storage existing = _lpWithdrawals[msg.sender];
+        if (existing.principal != 0 || _pendingWithdrawalLp != address(0)) {
+            revert();
+        }
         existing.principal = principal;
-        existing.paid = immediate;
-        existing.pending = pending;
+        // Keep the full unpaid NAV claim. processWithdrawal pays the quoted cash share first,
+        // leaving the returned `pending` amount for a later repayment-triggered settlement.
+        existing.pending = claimNav;
         emit WithdrawRequested(msg.sender, principal);
 
-        _payAdvance(msg.sender, immediate);
-        if (immediate > 0) emit WithdrawPaid(msg.sender, immediate);
-        if (pending > 0) {
-            if (_pendingWithdrawalLp != address(0)) {
-                revert();
-            }
-            _pendingWithdrawalLp = msg.sender;
-        } else {
-            _completeWithdrawal(msg.sender);
-        }
+        _pendingWithdrawalLp = msg.sender;
     }
 
-    function _processPendingWithdrawals() private {
+    /// @notice Permissionless keeper step for the quoted immediate withdrawal payment.
+    /// @dev The scenario runner calls this immediately after capturing the request-only t4 state.
+    function processWithdrawal() external {
+        _processPendingWithdrawals(false);
+    }
+
+    function _processPendingWithdrawals(bool releasePending) private {
         address lp = _pendingWithdrawalLp;
         if (lp == address(0)) return;
         LpWithdrawal storage withdrawal = _lpWithdrawals[lp];
-        if (poolCash() < withdrawal.pending) {
+        if (withdrawal.paid == 0) {
+            uint256 immediate = Math.min(
+                withdrawal.pending, Math.mulDiv(poolCash(), withdrawal.principal, totalLpPrincipal)
+            );
+            unchecked {
+                withdrawal.pending -= immediate;
+                withdrawal.paid += immediate;
+            }
+            if (immediate > 0) {
+                _payAdvance(lp, immediate);
+                emit WithdrawPaid(lp, immediate);
+            }
+        }
+        if (withdrawal.pending == 0) {
+            _completeWithdrawal(lp);
             return;
         }
+        if (!releasePending) return;
         uint256 payment = withdrawal.pending;
+        if (poolCash() < payment) return;
         unchecked {
             withdrawal.pending = 0;
             withdrawal.paid += payment;

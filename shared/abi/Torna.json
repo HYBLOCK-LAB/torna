@@ -1220,6 +1220,13 @@
   },
   {
     "type": "function",
+    "name": "processWithdrawal",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "protocolFees",
     "inputs": [],
     "outputs": [
@@ -2788,22 +2795,6 @@
     "type": "error",
     "name": "ReserveAlreadySeeded",
     "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "SafeCastOverflowedUintDowncast",
-    "inputs": [
-      {
-        "name": "bits",
-        "type": "uint8",
-        "internalType": "uint8"
-      },
-      {
-        "name": "value",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
   },
   {
     "type": "error",

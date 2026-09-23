@@ -4,6 +4,7 @@ import {
   parseSignature,
   stringToHex,
   type Abi,
+  type Address,
   type Hex,
 } from 'viem';
 
@@ -45,6 +46,9 @@ const USDC = 1_000_000n;
 const ONE_THOUSAND_USDC = 1_000n * USDC;
 const THIRTY_DAYS = 30 * 24 * 60 * 60;
 const FIVE_DAYS = 5 * 24 * 60 * 60;
+
+type LocalIssuerActor =
+    'hybridIssuer'|'auraIssuer'|'novaIssuer'|'meridianIssuer'|'kiteIssuer';
 
 /**
  * PRD section 7 t0 values in six-decimal MockUSDC base units. These are
@@ -115,7 +119,10 @@ function assertRepaidT0Position(value: unknown, request: AdvanceRequest): void {
   const issuer = positionField(value, 'issuer', 1);
   const amount = positionField(value, 'amount', 3);
   const state = positionField(value, 'state', 9);
-  if (exists !== true || issuer !== request.issuer || amount !== request.amount || state !== 2n) {
+  const stateIndex = typeof state === 'bigint' ? Number(state) : state;
+  const sameIssuer = typeof issuer === 'string'
+    && issuer.toLowerCase() === request.issuer.toLowerCase();
+  if (exists !== true || !sameIssuer || amount !== request.amount || stateIndex !== 2) {
     throw new Error('Confirmed t0 position does not match the expected Repaid state.');
   }
 }
@@ -191,7 +198,7 @@ async function latestTimestamp(session: LocalT0Session): Promise<bigint> {
 
 async function permitFor(
     session: LocalT0Session,
-    owner: 'hybridIssuer' | 'auraIssuer',
+    owner: LocalIssuerActor,
     asset: T0RunContext['asset'],
     spender: T0RunContext['torna'],
     value: bigint,
@@ -262,18 +269,22 @@ async function verifyRepaid(
 }
 
 async function advanceLocalTime(session: LocalT0Session): Promise<void> {
+  await increaseLocalTime(session, THIRTY_DAYS);
+}
+
+async function increaseLocalTime(session: LocalT0Session, seconds: number): Promise<void> {
   const request = session.publicClient.request as unknown as (args: {
     method: string;
     params?: readonly unknown[];
   }) => Promise<unknown>;
-  await request({ method: 'evm_increaseTime', params: [THIRTY_DAYS] });
+  await request({ method: 'evm_increaseTime', params: [seconds] });
   await request({ method: 'evm_mine', params: [] });
 }
 
 async function depositCollateral(
     session: LocalT0Session,
     context: T0RunContext,
-    actor: 'hybridIssuer' | 'auraIssuer',
+    actor: LocalIssuerActor,
     amount: bigint,
 ): Promise<void> {
   const { torna } = loadProtocolArtifacts();
@@ -420,10 +431,252 @@ export async function executeT0(
     advance,
     repayment,
   };
+  context.scenario = {auraEvent: [], withdrawalAdvances: [], captureBlocks: {}};
   return { timepointId: 't0', blockNumber: repayment.blockNumber };
 }
 
-/** Full scenarios stay blocked until their own receipt-checked handlers exist. */
-export async function executeScenario(_context: T0RunContext, _id: TimepointId): Promise<CapturePoint> {
-  throw new FullScenarioNotImplementedError();
+interface IssuedAdvance {
+  request: AdvanceRequest;
+  transaction: ConfirmedTransaction;
+}
+
+function scenarioState(context: T0RunContext): NonNullable<T0RunContext['scenario']> {
+  if (!context.scenario) {
+    context.scenario = {auraEvent: [], withdrawalAdvances: [], captureBlocks: {}};
+  }
+  return context.scenario;
+}
+
+async function issueAdvance(
+    session: LocalT0Session,
+    context: T0RunContext,
+    issuerActor: LocalIssuerActor,
+    refundKey: Hex,
+    acquirerHash: Hex,
+): Promise<IssuedAdvance> {
+  const {torna} = loadProtocolArtifacts();
+  const issuer = session.config.accounts[issuerActor];
+  const now = await latestTimestamp(session);
+  const request: AdvanceRequest = {
+    refundKey,
+    issuer: issuer.address,
+    acquirerHash,
+    amount: ONE_THOUSAND_USDC,
+    maturity: now + BigInt(FIVE_DAYS),
+    nonce: asBigInt(await readContractValue(
+        session, context.torna, torna.abi, 'advanceNonces', [issuer.address]),
+    'Torna.advanceNonces'),
+    deadline: now + 10n * 60n,
+  };
+  const signature = await issuer.signTypedData({
+    domain: tornaDomain(context.chainId, context.torna),
+    types: advanceRequestTypes,
+    primaryType: ADVANCE_REQUEST_PRIMARY_TYPE,
+    message: request,
+  });
+  const feeQuote = await readContractValue(
+      session, context.torna, torna.abi, 'quoteAdvanceFee', [request.amount]);
+  const fee = Array.isArray(feeQuote) ? feeQuote[0] : undefined;
+  if (typeof fee !== 'bigint') throw new Error('Torna.quoteAdvanceFee returned an invalid fee.');
+  const feePermit = await permitFor(
+      session, issuerActor, context.asset, context.torna, fee, request.deadline);
+  const transaction = await submitContract(
+      session, 'submitter', context.torna, torna.abi, 'advanceWithPermit',
+      [request, signature, feePermit], `Issue ${refundKey}`);
+  await verifyIssued(session, context, transaction, request);
+  return {request, transaction};
+}
+
+async function repayAdvance(
+    session: LocalT0Session,
+    context: T0RunContext,
+    issuerActor: LocalIssuerActor,
+    refundKey: Hex,
+): Promise<ConfirmedTransaction> {
+  const {torna} = loadProtocolArtifacts();
+  const issuer = session.config.accounts[issuerActor];
+  const now = await latestTimestamp(session);
+  const request: RepaymentRequest = {
+    refundKey,
+    issuer: issuer.address,
+    amount: ONE_THOUSAND_USDC,
+    nonce: asBigInt(await readContractValue(
+        session, context.torna, torna.abi, 'repaymentNonces', [issuer.address]),
+    'Torna.repaymentNonces'),
+    deadline: now + 10n * 60n,
+  };
+  const signature = await issuer.signTypedData({
+    domain: tornaDomain(context.chainId, context.torna),
+    types: repaymentRequestTypes,
+    primaryType: REPAYMENT_REQUEST_PRIMARY_TYPE,
+    message: request,
+  });
+  const permit = await permitFor(
+      session, issuerActor, context.asset, context.torna, request.amount, request.deadline);
+  const transaction = await submitContract(
+      session, 'submitter', context.torna, torna.abi, 'repayWithPermit',
+      [request, signature, permit], `Repay ${refundKey}`);
+  await verifyRepaid(session, context, transaction, request);
+  return transaction;
+}
+
+async function review(
+    session: LocalT0Session,
+    context: T0RunContext,
+    refundKey: Hex,
+    evidence: string,
+): Promise<ConfirmedTransaction> {
+  const {torna} = loadProtocolArtifacts();
+  return submitContract(
+      session, 'verifier', context.torna, torna.abi, 'openReview',
+      [refundKey, evidence], `Open review ${refundKey}`);
+}
+
+async function finalizeLoss(
+    session: LocalT0Session,
+    context: T0RunContext,
+    refundKey: Hex,
+): Promise<ConfirmedTransaction> {
+  const {torna} = loadProtocolArtifacts();
+  return submitContract(
+      session, 'verifier', context.torna, torna.abi, 'finalizeCoveredLoss',
+      [refundKey], `Finalize loss ${refundKey}`);
+}
+
+async function executeT1(
+    session: LocalT0Session, context: T0RunContext): Promise<CapturePoint> {
+  if (!context.t0) throw new FullScenarioNotImplementedError();
+  const {mockUsdc} = loadProtocolArtifacts();
+  // Preserve the exact t0 wallet balances, then fund only the remaining t1-through-t5 fees.
+  await submitContract(
+      session, 'deployer', context.asset, mockUsdc.abi, 'mint',
+      [context.actors.hybridIssuer, 110n * USDC], 'Mint remaining HYBRID scenario fees');
+  await submitContract(
+      session, 'deployer', context.asset, mockUsdc.abi, 'mint',
+      [context.actors.auraIssuer, 12n * USDC], 'Mint AURA scenario fees');
+  let finalTransaction: ConfirmedTransaction|undefined;
+  let yearlyLoss: Hex|undefined;
+  for (let index = 0; index < 365; index += 1) {
+    const refundKey = keccak256(stringToHex(`REF-LOCAL-YEAR-${String(index + 1).padStart(3, '0')}`));
+    const issued = await issueAdvance(
+        session, context, 'hybridIssuer', refundKey, context.t0.acquirerHash);
+    finalTransaction = issued.transaction;
+    if (index < 364) {
+      finalTransaction = await repayAdvance(session, context, 'hybridIssuer', refundKey);
+    } else {
+      yearlyLoss = refundKey;
+    }
+  }
+  if (!yearlyLoss || !finalTransaction) throw new Error('t1 did not create its reviewed position.');
+  await increaseLocalTime(session, FIVE_DAYS + 1);
+  finalTransaction = await review(
+      session, context, yearlyLoss, 'Upstream settlement agent non-receipt confirmation');
+  scenarioState(context).yearlyLoss = yearlyLoss;
+  return {timepointId: 't1', blockNumber: finalTransaction.blockNumber};
+}
+
+async function executeT2(
+    session: LocalT0Session, context: T0RunContext): Promise<CapturePoint> {
+  const refundKey = scenarioState(context).yearlyLoss;
+  if (!refundKey) throw new Error('t2 requires the t1 reviewed position.');
+  const transaction = await finalizeLoss(session, context, refundKey);
+  return {timepointId: 't2', blockNumber: transaction.blockNumber};
+}
+
+async function executeT3(
+    session: LocalT0Session, context: T0RunContext): Promise<CapturePoint> {
+  const auraAcquirer = keccak256(stringToHex('ACQ-β'));
+  const keys: Hex[] = [];
+  for (let index = 0; index < 4; index += 1) {
+    const key = keccak256(stringToHex(`REF-LOCAL-AURA-${index + 1}`));
+    await issueAdvance(session, context, 'auraIssuer', key, auraAcquirer);
+    keys.push(key);
+  }
+  await increaseLocalTime(session, FIVE_DAYS + 1);
+  let finalTransaction: ConfirmedTransaction|undefined;
+  for (const key of keys) {
+    await review(session, context, key, 'Acquirer beta stopped settling');
+    finalTransaction = await finalizeLoss(session, context, key);
+  }
+  if (!finalTransaction) throw new Error('t3 did not finalize its loss event.');
+  scenarioState(context).auraEvent = keys;
+  return {timepointId: 't3', blockNumber: finalTransaction.blockNumber};
+}
+
+async function executeT3b(
+    session: LocalT0Session, context: T0RunContext): Promise<CapturePoint> {
+  const keys = scenarioState(context).auraEvent;
+  if (keys.length !== 4) throw new Error('t3b requires the four-position t3 event.');
+  const {mockUsdc, torna} = loadProtocolArtifacts();
+  await submitContract(
+      session, 'deployer', context.asset, mockUsdc.abi, 'mint',
+      [context.actors.verifier, 2_200n * USDC], 'Mint local recovery funds');
+  await submitContract(
+      session, 'verifier', context.asset, mockUsdc.abi, 'approve',
+      [context.torna, 2_200n * USDC], 'Approve recovery funds');
+  const transaction = await submitContract(
+      session, 'verifier', context.torna, torna.abi, 'recordRecovery',
+      [keys[0], 2_200n * USDC], 'Record t3b recovery');
+  return {timepointId: 't3b', blockNumber: transaction.blockNumber};
+}
+
+async function executeT4(
+    session: LocalT0Session, context: T0RunContext): Promise<CapturePoint> {
+  if (!context.t0) throw new Error('t4 requires t0 issuer metadata.');
+  const keys: Hex[] = [];
+  for (let index = 0; index < 4; index += 1) {
+    const key = keccak256(stringToHex(`REF-LOCAL-WITHDRAW-${index + 1}`));
+    await issueAdvance(session, context, 'hybridIssuer', key, context.t0.acquirerHash);
+    keys.push(key);
+  }
+  const {torna} = loadProtocolArtifacts();
+  const transaction = await submitContract(
+      session, 'lp03', context.torna, torna.abi, 'requestWithdraw',
+      [2_000n * USDC], 'Request LP-03 withdrawal');
+  scenarioState(context).withdrawalAdvances = keys;
+  return {timepointId: 't4', blockNumber: transaction.blockNumber};
+}
+
+async function executeT4b(
+    session: LocalT0Session, context: T0RunContext): Promise<CapturePoint> {
+  const keys = scenarioState(context).withdrawalAdvances;
+  if (keys.length !== 4) throw new Error('t4b requires the four t4 advances.');
+  const {torna} = loadProtocolArtifacts();
+  await submitContract(
+      session, 'submitter', context.torna, torna.abi, 'processWithdrawal', [],
+      'Pay LP-03 immediate withdrawal quote');
+  let transaction: ConfirmedTransaction|undefined;
+  for (let index = 0; index < 3; index += 1) {
+    transaction = await repayAdvance(session, context, 'hybridIssuer', keys[index]!);
+  }
+  if (!transaction) throw new Error('t4b did not repay its three matured advances.');
+  return {timepointId: 't4b', blockNumber: transaction.blockNumber};
+}
+
+async function executeT5(
+    session: LocalT0Session, context: T0RunContext): Promise<CapturePoint> {
+  if (!context.t0) throw new Error('t5 requires t0 issuer metadata.');
+  const refundKey = keccak256(stringToHex('REF-LOCAL-DELAYED'));
+  await issueAdvance(session, context, 'hybridIssuer', refundKey, context.t0.acquirerHash);
+  await increaseLocalTime(session, FIVE_DAYS + 1);
+  await review(session, context, refundKey, 'Delayed upstream settlement');
+  const transaction = await repayAdvance(session, context, 'hybridIssuer', refundKey);
+  scenarioState(context).delayedRepayment = refundKey;
+  return {timepointId: 't5', blockNumber: transaction.blockNumber};
+}
+
+/** Execute only receipt-checked handlers. Missing t6/t7 decisions remain hard failures. */
+export async function executeScenario(
+    session: LocalT0Session, context: T0RunContext, id: TimepointId): Promise<CapturePoint> {
+  switch (id) {
+    case 't0': return executeT0(session, context);
+    case 't1': return executeT1(session, context);
+    case 't2': return executeT2(session, context);
+    case 't3': return executeT3(session, context);
+    case 't3b': return executeT3b(session, context);
+    case 't4': return executeT4(session, context);
+    case 't4b': return executeT4b(session, context);
+    case 't5': return executeT5(session, context);
+    default: throw new FullScenarioNotImplementedError();
+  }
 }

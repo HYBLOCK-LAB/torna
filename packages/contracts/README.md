@@ -27,8 +27,10 @@ Owner: Minseo (B). Local PoC, updated 2026-09-22.
 - Unit/fuzz tests and a shared Solidity/viem hash vector.
 
 **Partial repayment is not implemented.** LP withdrawals now use NAV/share pricing:
-`requestWithdraw(principal)` pays `min(NAV × share, cash × share)` immediately and keeps
-the remainder pending until a repayment makes it payable. Completion removes the LP's
+`requestWithdraw(principal)` records `min(NAV × share, cash × share)` as the immediate
+quote without changing the t4 accounting snapshot. The permissionless `processWithdrawal()`
+keeper step pays that quote, and a later repayment automatically pays the pending remainder.
+Completion removes the LP's
 principal, proportional fee share and current LP-loss share. Post-bootstrap LP deposits are
 implemented with PRD cap-based partial acceptance. Loss execution is implemented locally but
 the current demo keeps one pending LP withdrawal at a time; a multi-request queue remains future work.
@@ -188,8 +190,9 @@ protocol fees, collateral and unsolicited donations do not increase LP capacity.
 `totalLoss()` separately reports current collateral loss + reserve loss + LP loss for
 the public metrics view.
 Per-issuer/acquirer/aggregate outstanding and total successful count/amount are stored.
-Aggregate LP fees are distributed pro rata when an LP withdrawal completes; an active
-withdrawal's immediate payment is tracked separately until its pending remainder is paid.
+Aggregate LP fees are distributed pro rata when an LP withdrawal completes. The request-only
+t4 state remains observable before `processWithdrawal()` transfers the immediate quote; that
+payment is then tracked separately until a repayment releases the pending remainder.
 The admin seeds the fixed 500 USDC reserve once through `seedReserve`; the seed is
 tracked separately from fee-funded reserve balance and does not increase LP capacity.
 
@@ -315,10 +318,12 @@ This is a host-tool startup failure, not a Solidity test failure.
 
 ## Layout
 
-The local t0 runner and the remaining deployment/scenario boundaries are documented in
+The local scenario runner and its remaining boundaries are documented in
 [script/README.md](script/README.md). `corepack pnpm --filter @torna/contracts scenario:plan`
-displays the 13-timepoint plan without chain access. `scenario:t0` is the only wired
-chain path; later handlers and final bundle output remain unavailable.
+displays the 13-timepoint plan without chain access. `scenario:t0` remains the narrow
+smoke command, while `scenario:t5` runs and saves the continuous implemented segment from
+t0 through t5. Receipt-checked handlers and chain-derived capture are implemented through
+t5, while t6+ and final bundle output remain unavailable.
 
 - src/Torna.sol: roles, initial/ordinary liquidity, reserve, collateral, issuer/ramp
   queries, signed advances and full-principal repayments.
@@ -340,10 +345,9 @@ the same pure calculations and keeps event grouping in Torna.
 
 ## Next implementation gate
 
-Initial funding follows the approved D01 decision. Resolve the remaining decisions
-in DECISIONS.md before building the other stateful token flows.
-Then implement collateral withdrawal and extend the LP withdrawal accounting into the
-full timepoint runner alongside its tests.
+Initial funding follows the approved D01 decision. Loss, recovery and LP withdrawal are
+implemented through t5. Resolve the remaining t6 idle-deployment and t7 ledger-retry
+decisions in DECISIONS.md before extending the full timepoint runner.
 `shared/abi/Torna.json` is generated from the current compiled implementation.
 Regenerate with `export:abi` after interface changes; do not hand-edit it.
 

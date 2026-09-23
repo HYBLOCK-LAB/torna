@@ -15,7 +15,15 @@ export const implementedContractFeatures: ReadonlySet<Feature> = new Set([
   'reserveSeed',
   'advance',
   'repay',
+  'review',
+  'coveredLoss',
+  'recovery',
+  'withdrawal',
   'liquidityDeposit',
+]);
+
+export const implementedScenarioHandlers: ReadonlySet<TimepointId> = new Set([
+  't0', 't1', 't2', 't3', 't3b', 't4', 't4b', 't5',
 ]);
 
 export interface ScenarioPlan {
@@ -92,12 +100,14 @@ export function missingFeatures(step: ScenarioPlan): Feature[] {
 
 export function describePlan(): string {
   return [
-    'Torna scenario scaffold — PLAN ONLY; no RPC, wallets, transactions or files.',
-    'Only local t0 is wired; all later scenario handlers and bundle output remain unavailable.',
+    'Torna scenario plan — PLAN ONLY; no RPC, wallets, transactions or files.',
+    'Local receipt-checked handlers are wired through t5; t6+ and bundle output remain unavailable.',
     ...scenarioPlan.map(step => {
       const missing = missingFeatures(step);
       return `${step.id}: ${step.description}\n  Missing features: ${
-          missing.join(', ') || 'none; execution handler still missing'}`;
+          missing.join(', ') || (implementedScenarioHandlers.has(step.id)
+            ? 'none; local handler ready'
+            : 'none; execution handler still missing')}`;
     }),
   ].join('\n');
 }
