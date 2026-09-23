@@ -1,0 +1,167 @@
+{
+  "schemaVersion": 1,
+  "runId": "sample",
+  "timepointId": "t2",
+  "seq": 2,
+  "label": {
+    "ko": "최종 손실 → 워터폴",
+    "en": "Confirmed loss → waterfall"
+  },
+  "chainId": 10143,
+  "contract": "0x0000000000000000000000000000000000000000",
+  "blockNumber": 1284399,
+  "capturedAt": "2026-09-19T00:00:00Z",
+  "amountUnit": "USDC",
+  "note": "온체인은 6자리 정수. 스냅샷은 USDC 단위 숫자로 변환해 기록한다.",
+  "pool": {
+    "lpDeposits": 10000,
+    "lpFeeAccrued": 878.4,
+    "lpLossApplied": 153.6,
+    "netAssetValue": 10724.8,
+    "advancedOutstanding": 0,
+    "cashAvailable": 10724.8,
+    "reserve": 0,
+    "reserveUsed": 646.4,
+    "capHeld": 0,
+    "externalDeployed": 0,
+    "externalFrozen": false,
+    "protocolFee": 73.2
+  },
+  "issuers": [
+    {
+      "key": "HYBRID",
+      "name": "HYBRID Travel Card",
+      "acquirerHash": "0xea2b5fc87a034a1947b3a920f51605b48a88116bdd6d455d1b25f904d81ee917",
+      "collateralInitial": 3000,
+      "collateralRemaining": 2800,
+      "outstanding": 0,
+      "effectiveLimit": 5362.4,
+      "rampUp": false,
+      "state": "Active"
+    },
+    {
+      "key": "AURA",
+      "name": "AURA Travel Card",
+      "acquirerHash": "0x5f7ebc300ba839dbfc23098f1651eed019d1d84393764651113d02bb4cd57842",
+      "collateralInitial": 600,
+      "collateralRemaining": 600,
+      "outstanding": 0,
+      "effectiveLimit": 4000,
+      "rampUp": false,
+      "state": "Active"
+    }
+  ],
+  "liquidityProviders": [
+    {
+      "name": "LP-01",
+      "deposit": 5000,
+      "sharePct": 50
+    },
+    {
+      "name": "LP-02",
+      "deposit": 3000,
+      "sharePct": 30
+    },
+    {
+      "name": "LP-03",
+      "deposit": 2000,
+      "sharePct": 20
+    }
+  ],
+  "positions": [
+    {
+      "refundKey": "0x9f41089dda4350a77a31d937da559e23e4510de39609e4a88c9fc54a20da0e1f",
+      "issuer": "HYBRID",
+      "acquirerHash": "0xea2b5fc87a034a1947b3a920f51605b48a88116bdd6d455d1b25f904d81ee917",
+      "amount": 1000,
+      "fee": 3,
+      "issuerMargin": 200,
+      "poolCoverage": 800,
+      "state": "Repaid",
+      "evidence": null,
+      "txHash": "0xa0e679503978e3d402aa279b5e856fa73f305f7e2fda046be1ba74eef56718bd",
+      "createdAtTimepoint": 0
+    },
+    {
+      "refundKey": "0x623326bbdc69494053d0deb60f14ee7729bc0385bcad6f10a79d4a51667472c7",
+      "issuer": "HYBRID",
+      "acquirerHash": "0xea2b5fc87a034a1947b3a920f51605b48a88116bdd6d455d1b25f904d81ee917",
+      "amount": 1000,
+      "fee": 3,
+      "issuerMargin": 200,
+      "poolCoverage": 800,
+      "state": "CoveredLoss",
+      "evidence": "Upstream settlement agent non-receipt confirmation",
+      "txHash": "0x7f4c64626653e86ddbfa46d6e896fabbc657a851c3f4f325ae860b387ce8c942",
+      "createdAtTimepoint": 1,
+      "history": [
+        "Advanced",
+        "Overdue",
+        "Review",
+        "CoveredLoss"
+      ]
+    }
+  ],
+  "metrics": {
+    "cumulativeCount": 366,
+    "cumulativeAdvanced": 366000,
+    "lossTotal": 1000,
+    "lossRatePct": 0.27,
+    "repayRatePct": 99.73,
+    "utilizationPct": 0,
+    "acquirerTopExposure": 0,
+    "acquirerExposureLimit": 5362.4,
+    "lpDepositCap": 16667,
+    "rejectedRequests": 0
+  },
+  "events": [
+    {
+      "blockNumber": 1284399,
+      "name": "CoveredLossFinalized",
+      "target": "REF-2026-021",
+      "amount": 800,
+      "txHash": "0x63ba557bb194de8ba851d19d23c357f04564e7a29323feaaf324024e9b922a04",
+      "timepointSeq": 2
+    },
+    {
+      "blockNumber": 1284398,
+      "name": "ReviewOpened",
+      "target": "REF-2026-021",
+      "amount": 1000,
+      "txHash": "0x58abe89b8827af54ee5573c4b1e6ed4325a674a7802bd0ae54c54bf9c37de779",
+      "timepointSeq": 1
+    },
+    {
+      "blockNumber": 1284397,
+      "name": "YearlySummaryLoaded",
+      "target": "protocol",
+      "amount": 365000,
+      "txHash": "0xb23da8858f72c0ef77e4c1556dfe4272e56ec744a943d08188d1669e5753201d",
+      "timepointSeq": 1
+    },
+    {
+      "blockNumber": 1284396,
+      "name": "AdvanceRepaid",
+      "target": "REF-2026-001",
+      "amount": 1000,
+      "txHash": "0x40298a0e82475f78f642a9b76bf63dd648319d28e2aea9025f4f66442ae677b9",
+      "timepointSeq": 0
+    },
+    {
+      "blockNumber": 1284393,
+      "name": "AdvanceIssued",
+      "target": "REF-2026-001",
+      "amount": 1000,
+      "txHash": "0xf4b183fdc1310b7ed642001287883420e25807a57c109cacd5838c4b7153b622",
+      "timepointSeq": 0
+    },
+    {
+      "blockNumber": 1284392,
+      "name": "RefundConfirmed",
+      "target": "REF-2026-001",
+      "amount": 1000,
+      "txHash": "0x7d6ad5120813a704605c1dcc7a4f9507870d73da19db0d57d6555d8f108efd98",
+      "timepointSeq": 0
+    }
+  ]
+}
