@@ -1,8 +1,8 @@
 import {TIMEPOINT_ORDER, type TimepointId} from '../../../../shared/types/snapshot';
 
 /**
- * Dependencies, not a claim that the scenario runner or adapters are
- * implemented.
+ * Available code boundaries, not evidence that a continuous DB-backed run
+ * or final snapshot bundle has succeeded.
  */
 export type Feature =|'initialLiquidity'|'issuerRegistration'|'collateral'|
     'advance'|'reserveSeed'|'repay'|'review'|'coveredLoss'|'recovery'|
@@ -19,11 +19,13 @@ export const implementedContractFeatures: ReadonlySet<Feature> = new Set([
   'coveredLoss',
   'recovery',
   'withdrawal',
+  'idleDeployment',
+  'ledgerRetry',
   'liquidityDeposit',
 ]);
 
 export const implementedScenarioHandlers: ReadonlySet<TimepointId> = new Set([
-  't0', 't1', 't2', 't3', 't3b', 't4', 't4b', 't5',
+  't0', 't1', 't2', 't3', 't3b', 't4', 't4b', 't5', 't6', 't7', 't8', 't9', 't9b',
 ]);
 
 export interface ScenarioPlan {
@@ -101,7 +103,7 @@ export function missingFeatures(step: ScenarioPlan): Feature[] {
 export function describePlan(): string {
   return [
     'Torna scenario plan — PLAN ONLY; no RPC, wallets, transactions or files.',
-    'Local receipt-checked handlers are wired through t5; t6+ and bundle output remain unavailable.',
+    'Local handlers exist through t7 and for t8/t9/t9b; t7 requires real ledger IO, and full bundle output remains unavailable.',
     ...scenarioPlan.map(step => {
       const missing = missingFeatures(step);
       return `${step.id}: ${step.description}\n  Missing features: ${

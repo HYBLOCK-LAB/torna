@@ -317,6 +317,46 @@ nonce prevent replays. Partial/excess amount, mismatched issuer, unknown or term
 expired/invalid action, missing allowance, short transfer and backing deficits revert
 atomically. Partial repayment and collateral withdrawal remain open under D05.
 
+## External idle liquidity (t6)
+
+`idle.ts` exports the compiled-function subset used by t6 consumers.
+`setIdleVault(address)` is admin-only and accepts one external EOA, not a third
+deployed contract. Grant `TREASURY_ROLE` separately before calling `deployIdle` or
+`recallIdle`. `deployIdle(amount)` transfers actual MockUSDC to that EOA and rejects
+amounts that would exceed 50% of current `netAssetValue()` or available pool cash.
+It emits `IdleDeployed` only after the transfer. `poolCapacity()` is spendable
+capital (`netAssetValue() - externalDeployed()`), not NAV itself.
+
+`recallIdle(amount)` attempts MockUSDC `transferFrom(idleVault, Torna, amount)`.
+Without EOA allowance the token call fails naturally; Torna records
+`IdleWithdrawFailed`, sets `externalFrozen()` and leaves the outside balance and
+`externalDeployed()` unchanged. Further deployments are rejected while frozen.
+Consumers should query both token balances and the Torna state; an event alone is
+not proof of custody. There is no automatically approved unfreeze procedure.
+
+## Ledger credit retry acknowledgment (t7)
+
+`ledger-credit.ts` exports `confirmLedgerCredit(bytes32 refundKey)`. It is a
+recovery-only call, never part of normal advance + immediate ledger credit.
+Before the SUBMITTER_ROLE adapter wallet sends it, the adapter retry job must
+verify **all four** conditions:
+
+1. A matching `AdvanceIssued` log from Torna proves the original advance; a
+   successful transaction receipt by itself is insufficient.
+2. The ledger credit previously failed and this refund entered the retry queue.
+3. The retry succeeded and `ledger_credits` now contains exactly one row for
+   this `refund_key` (`UNIQUE(refund_key)` prevents a second row).
+4. Torna has not already emitted `LedgerCreditConfirmed` for this key.
+
+Torna independently checks that the position exists and that no prior
+confirmation was recorded; a repeat call reverts. The call moves no tokens and
+changes no advance, fee, loss or LP accounting. Its receipt emits one
+`LedgerCreditConfirmed(refundKey)` event.
+
+The event is the submitter's on-chain acknowledgment, **not** an independent
+on-chain proof that a DB row exists. The adapter owns that DB check and the
+`UNIQUE(refund_key)` idempotency guarantee. No full t7 DB retry run is claimed here.
+
 ## Identifier encoding
 
 Hash the **exact UTF-8 bytes** of refundId and acquirerId:

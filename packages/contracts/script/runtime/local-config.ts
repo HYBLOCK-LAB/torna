@@ -20,6 +20,7 @@ export interface LocalT0SigningAccounts {
   lp04: SigningAccount;
   lp05: SigningAccount;
   lp06: SigningAccount;
+  idleVault: SigningAccount;
 }
 
 /**
@@ -99,6 +100,7 @@ export function publicActors(accounts: LocalT0SigningAccounts): LocalT0Actors {
     lp04: accounts.lp04.address,
     lp05: accounts.lp05.address,
     lp06: accounts.lp06.address,
+    idleVault: accounts.idleVault.address,
   };
 }
 
@@ -131,6 +133,7 @@ export function loadLocalT0Config(
     lp04: accountAt(mnemonic, 11),
     lp05: accountAt(mnemonic, 12),
     lp06: accountAt(mnemonic, 13),
+    idleVault: accountAt(mnemonic, 14),
   } satisfies LocalT0SigningAccounts;
   return { rpcUrl, chainId, runId, accounts };
 }

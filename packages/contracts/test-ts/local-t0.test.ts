@@ -1,12 +1,16 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
-import type {Snapshot} from '../../../shared/types/snapshot';
+import {TIMEPOINT_ORDER, type Snapshot} from '../../../shared/types/snapshot';
 import {
   formatLocalT0ExecutionReport,
   LOCAL_T0_TO_T5,
+  LOCAL_T0_TO_T6,
+  LOCAL_T0_TO_T7,
   runLocalT0,
   runLocalT0ToT5,
+  runLocalT0ToT6,
+  runLocalT0ToT7,
 } from '../script/run-scenarios';
 import {
   LocalT0ConfigurationError,
@@ -45,6 +49,7 @@ const context: T0RunContext = {
     lp04: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
     lp05: '0xffffffffffffffffffffffffffffffffffffffff',
     lp06: '0x1212121212121212121212121212121212121212',
+    idleVault: '0x1313131313131313131313131313131313131313',
   },
 };
 
@@ -93,14 +98,14 @@ function mockSegmentRuntime(calls: string[]): LocalScenarioRuntime {
     async deploy() { calls.push('deploy'); return structuredClone(context); },
     async execute(_context, id) {
       calls.push(`execute:${id}`);
-      return {timepointId: id, blockNumber: BigInt(LOCAL_T0_TO_T5.indexOf(id) + 2)};
+      return {timepointId: id, blockNumber: BigInt(TIMEPOINT_ORDER.indexOf(id) + 2)};
     },
     async capture(_context, point) {
       calls.push(`capture:${point.timepointId}`);
       return {
         ...structuredClone(snapshot),
         timepointId: point.timepointId,
-        seq: LOCAL_T0_TO_T5.indexOf(point.timepointId),
+        seq: TIMEPOINT_ORDER.indexOf(point.timepointId),
         blockNumber: Number(point.blockNumber),
       };
     },
@@ -158,6 +163,28 @@ test('local t0 through t5 captures each confirmed point before continuing', asyn
   assert.deepEqual(calls, [
     'preflight', 'deploy',
     ...LOCAL_T0_TO_T5.flatMap(id => [
+      `execute:${id}`, `capture:${id}`, `save:${id}`,
+    ]),
+  ]);
+});
+
+test('local t0 through t6 captures the frozen state after its confirmed recall', async () => {
+  const calls: string[] = [];
+  await runLocalT0ToT6(mockSegmentRuntime(calls));
+  assert.deepEqual(calls, [
+    'preflight', 'deploy',
+    ...LOCAL_T0_TO_T6.flatMap(id => [
+      `execute:${id}`, `capture:${id}`, `save:${id}`,
+    ]),
+  ]);
+});
+
+test('local t0 through t7 captures the recovered ledger event before continuing', async () => {
+  const calls: string[] = [];
+  await runLocalT0ToT7(mockSegmentRuntime(calls));
+  assert.deepEqual(calls, [
+    'preflight', 'deploy',
+    ...LOCAL_T0_TO_T7.flatMap(id => [
       `execute:${id}`, `capture:${id}`, `save:${id}`,
     ]),
   ]);

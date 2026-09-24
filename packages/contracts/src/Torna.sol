@@ -85,6 +85,12 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
     error ReserveAlreadySeeded();
     error InvalidReserveSeedAmount(uint256 expected, uint256 actual);
     error InsufficientReserveSeedAllowance(uint256 available, uint256 required);
+    error IdleVaultAlreadyConfigured();
+    error IdleVaultNotConfigured();
+    error IdleFrozen();
+    error IdleCapExceeded(uint256 limit, uint256 attempted);
+    error InvalidIdleAmount();
+    error LedgerCreditAlreadyConfirmed();
 
     event InitialLiquidityConfigured(address[3] lps);
     event InitialLiquidityCompleted(uint256 totalPrincipal);
@@ -110,6 +116,7 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
     mapping(address => uint256) public advanceNonces;
     mapping(address => uint256) public repaymentNonces;
     mapping(bytes32 => Position) private _positions;
+    mapping(bytes32 => bool) private _ledgerCreditConfirmed;
     mapping(address => uint256) public issuerOutstanding;
     mapping(bytes32 => uint256) public acquirerOutstanding;
     uint256 public totalOutstanding;
@@ -123,11 +130,15 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
     uint256 public protocolFees;
     uint256 public totalAdvanceCount;
     uint256 public totalAdvanced;
+    address public idleVault;
+    uint256 public externalDeployed;
+    bool public externalFrozen;
     mapping(bytes32 => uint256) public eventRecognizedCoverage;
     mapping(bytes32 => bytes32[]) private _eventPositions;
     mapping(bytes32 => EventAccounting) private _eventAccounting;
     bytes32 public constant VERIFIER_ROLE = keccak256("VERIFIER_ROLE");
     bytes32 public constant SUBMITTER_ROLE = keccak256("SUBMITTER_ROLE");
+    bytes32 public constant TREASURY_ROLE = keccak256("TREASURY_ROLE");
     bytes32 public constant ADVANCE_REQUEST_TYPEHASH = keccak256(
         "AdvanceRequest(bytes32 refundKey,address issuer,bytes32 acquirerHash,uint256 amount,uint64 maturity,uint256 nonce,uint256 deadline)"
     );
@@ -213,15 +224,63 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
         );
     }
 
-    /// @notice Current LP capacity after fees and finalized LP losses.
+    /// @notice LP NAV after fees and finalized LP losses, including externally deployed funds.
     /// @dev Collateral, reserve, protocol fees and direct token donations are NOT LP assets.
-    function poolCapacity() public view returns (uint256) {
+    function netAssetValue() public view returns (uint256) {
         uint256 withdrawalPaid = _lpWithdrawals[_pendingWithdrawalLp].paid;
         return Limits.remaining(totalLpPrincipal + totalLpFees, totalLpLoss + withdrawalPaid);
     }
 
+    /// @notice Capital available to back advances; frozen external funds remain in NAV.
+    function poolCapacity() public view returns (uint256) {
+        return Limits.remaining(netAssetValue(), externalDeployed);
+    }
+
     function poolCash() public view returns (uint256) {
         return Limits.remaining(poolCapacity(), totalOutstanding);
+    }
+
+    /// @notice Configure the external EOA once; it is not another deployed contract.
+    function setIdleVault(address vault) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (idleVault != address(0)) revert IdleVaultAlreadyConfigured();
+        if (vault == address(0) || vault.code.length != 0) revert InvalidAddress();
+        idleVault = vault;
+    }
+
+    /// @notice Treasury moves actual pool tokens to the external EOA, within 50% of NAV.
+    function deployIdle(uint256 amount)
+        external
+        onlyRole(TREASURY_ROLE)
+        whenLiquidityReady
+        nonReentrant
+    {
+        if (idleVault == address(0)) revert IdleVaultNotConfigured();
+        if (externalFrozen) revert IdleFrozen();
+        if (amount == 0) revert InvalidIdleAmount();
+        uint256 limit = netAssetValue() / 2;
+        uint256 attempted = externalDeployed + amount;
+        if (attempted > limit) revert IdleCapExceeded(limit, attempted);
+        uint256 cash = poolCash();
+        if (amount > cash) revert InsufficientPoolCash(cash, amount);
+        _payAdvance(idleVault, amount);
+        externalDeployed = attempted;
+        emit IdleDeployed(amount);
+    }
+
+    /// @notice A failed vault transfer is recorded on chain and freezes further deployment.
+    function recallIdle(uint256 amount) external onlyRole(TREASURY_ROLE) nonReentrant {
+        if (idleVault == address(0)) revert IdleVaultNotConfigured();
+        if (amount == 0 || amount > externalDeployed) revert InvalidIdleAmount();
+        try asset.transferFrom(idleVault, address(this), amount) returns (bool transferred) {
+            if (transferred) {
+                externalDeployed -= amount;
+                return;
+            }
+        } catch {
+            // The external EOA did not approve Torna (or could not pay).
+        }
+        externalFrozen = true;
+        emit IdleWithdrawFailed(amount);
     }
 
     /// @notice Limit sourced from actual stored accounting, not caller-supplied balances.
@@ -243,6 +302,15 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
     function positionOf(bytes32 refundKey) external view returns (Position memory) {
         if (!_positions[refundKey].exists) revert UnknownPosition(refundKey);
         return _positions[refundKey];
+    }
+
+    /// @notice Adapter acknowledgment after it verifies a matching DB ledger-credit row.
+    /// @dev Only the retry path should call this; the contract cannot inspect the DB itself.
+    function confirmLedgerCredit(bytes32 refundKey) external onlyRole(SUBMITTER_ROLE) {
+        if (!_positions[refundKey].exists) revert UnknownPosition(refundKey);
+        if (_ledgerCreditConfirmed[refundKey]) revert LedgerCreditAlreadyConfirmed();
+        _ledgerCreditConfirmed[refundKey] = true;
+        emit LedgerCreditConfirmed(refundKey);
     }
 
     /// @notice PRD: 0.3% fee, split 80% / 13.3% / 6.7%.
@@ -307,9 +375,7 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
     }
 
     function _issueAdvance(AdvanceRequest calldata request) private {
-        uint256 backing = poolCash() + totalCollateral + reserveBalance + protocolFees;
-        uint256 actual = asset.balanceOf(address(this));
-        if (actual < backing) revert InsufficientAssetBacking(actual, backing);
+        _requireAssetBacking();
         (uint256 fee, uint256 lpFee, uint256 reserveFee, uint256 protocolFee) =
             quoteAdvanceFee(request.amount);
         if (fee != 0) _pullPoolPayment(request.issuer, fee, 0);
@@ -348,10 +414,20 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
         uint256 beforePool = asset.balanceOf(address(this));
         uint256 beforeIssuer = asset.balanceOf(issuer);
         IERC20(address(asset)).safeTransfer(issuer, amount);
-        uint256 afterPool = asset.balanceOf(address(this));
-        uint256 afterIssuer = asset.balanceOf(issuer);
-        uint256 debited = beforePool >= afterPool ? beforePool - afterPool : 0;
-        uint256 received = afterIssuer >= beforeIssuer ? afterIssuer - beforeIssuer : 0;
+        _checkExactPayment(address(this), issuer, beforePool, beforeIssuer, amount);
+    }
+
+    function _checkExactPayment(
+        address payer,
+        address receiver,
+        uint256 beforePayer,
+        uint256 beforeReceiver,
+        uint256 amount
+    ) private view {
+        uint256 afterPayer = asset.balanceOf(payer);
+        uint256 afterReceiver = asset.balanceOf(receiver);
+        uint256 debited = beforePayer >= afterPayer ? beforePayer - afterPayer : 0;
+        uint256 received = afterReceiver >= beforeReceiver ? afterReceiver - beforeReceiver : 0;
         if (debited != amount || received != amount) {
             revert UnexpectedTokenPayment(amount, debited, received);
         }
@@ -430,13 +506,7 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
         uint256 beforePool = asset.balanceOf(address(this));
         uint256 beforeIssuer = asset.balanceOf(issuer);
         IERC20(address(asset)).safeTransferFrom(issuer, address(this), amount);
-        uint256 afterPool = asset.balanceOf(address(this));
-        uint256 afterIssuer = asset.balanceOf(issuer);
-        uint256 debited = beforeIssuer >= afterIssuer ? beforeIssuer - afterIssuer : 0;
-        uint256 received = afterPool >= beforePool ? afterPool - beforePool : 0;
-        if (debited != amount || received != amount) {
-            revert UnexpectedTokenPayment(amount, debited, received);
-        }
+        _checkExactPayment(issuer, address(this), beforeIssuer, beforePool, amount);
     }
 
     function _recordRepayment(RepaymentRequest calldata request) private {
@@ -448,9 +518,7 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
 
         _processPendingWithdrawals(true);
 
-        uint256 required = poolCash() + totalCollateral + reserveBalance + protocolFees;
-        uint256 actual = asset.balanceOf(address(this));
-        if (actual < required) revert InsufficientAssetBacking(actual, required);
+        _requireAssetBacking();
         emit AdvanceRepaid(request.refundKey, request.amount);
     }
 
@@ -543,10 +611,14 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
         if (collateralOf[issuer] == 0) emit IssuerSuspended(issuer);
         delete _eventPositions[acquirerHash];
         delete _eventAccounting[acquirerHash];
+        _requireAssetBacking();
+        emit RecoveryRecorded(refundKey, recovered);
+    }
+
+    function _requireAssetBacking() private view {
         uint256 required = poolCash() + totalCollateral + reserveBalance + protocolFees;
         uint256 actual = asset.balanceOf(address(this));
         if (actual < required) revert InsufficientAssetBacking(actual, required);
-        emit RecoveryRecorded(refundKey, recovered);
     }
 
     function _settlementForEvent(bytes32 acquirerHash, uint256 recovered)
@@ -767,11 +839,7 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
             if (kind == 1) revert InsufficientCollateralAllowance(allowance, amount);
             revert InsufficientReserveSeedAllowance(allowance, amount);
         }
-        uint256 beforeBalance = asset.balanceOf(address(this));
-        IERC20(address(asset)).safeTransferFrom(payer, address(this), amount);
-        uint256 afterBalance = asset.balanceOf(address(this));
-        uint256 received = afterBalance >= beforeBalance ? afterBalance - beforeBalance : 0;
-        if (received != amount) revert UnexpectedTokenReceipt(amount, received);
+        _pullExactTokens(payer, amount);
     }
 
     /// @notice Fix LP-01/02/03 before funding. No replacement or reopening, even by admin.
@@ -809,11 +877,7 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
         lpPrincipal[msg.sender] += amount;
         totalLpPrincipal = nextPrincipal;
 
-        uint256 balanceBefore = asset.balanceOf(address(this));
-        IERC20(address(asset)).safeTransferFrom(msg.sender, address(this), amount);
-        uint256 balanceAfter = asset.balanceOf(address(this));
-        uint256 received = balanceAfter >= balanceBefore ? balanceAfter - balanceBefore : 0;
-        if (received != amount) revert UnexpectedTokenReceipt(amount, received);
+        _pullExactTokens(msg.sender, amount);
 
         emit LiquidityDeposited(msg.sender, amount);
         // Set readiness only after the final transfer and exact receipt verification.
@@ -839,11 +903,7 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
             return 0;
         }
 
-        uint256 balanceBefore = asset.balanceOf(address(this));
-        IERC20(address(asset)).safeTransferFrom(msg.sender, address(this), accepted);
-        uint256 balanceAfter = asset.balanceOf(address(this));
-        uint256 received = balanceAfter >= balanceBefore ? balanceAfter - balanceBefore : 0;
-        if (received != accepted) revert UnexpectedTokenReceipt(accepted, received);
+        _pullExactTokens(msg.sender, accepted);
 
         lpPrincipal[msg.sender] += accepted;
         totalLpPrincipal += accepted;
@@ -860,6 +920,14 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
         return Limits.depositRoom(totalLpPrincipal, lpPrincipal[lp], totalOutstanding);
     }
 
+    function _pullExactTokens(address payer, uint256 amount) private {
+        uint256 balanceBefore = asset.balanceOf(address(this));
+        IERC20(address(asset)).safeTransferFrom(payer, address(this), amount);
+        uint256 balanceAfter = asset.balanceOf(address(this));
+        uint256 received = balanceAfter >= balanceBefore ? balanceAfter - balanceBefore : 0;
+        if (received != amount) revert UnexpectedTokenReceipt(amount, received);
+    }
+
     /// @notice Request an LP exit; any cash-constrained remainder is paid after repayment.
     /// @dev The request snapshots the LP's proportional fee and current-loss shares.
     function requestWithdraw(uint256 principal)
@@ -871,7 +939,7 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
         if (principal == 0 || principal > available) {
             revert();
         }
-        uint256 claimNav = Math.mulDiv(poolCapacity(), principal, totalLpPrincipal);
+        uint256 claimNav = Math.mulDiv(netAssetValue(), principal, totalLpPrincipal);
         uint256 cashShare = Math.mulDiv(poolCash(), principal, totalLpPrincipal);
         immediate = Math.min(claimNav, cashShare);
         unchecked {

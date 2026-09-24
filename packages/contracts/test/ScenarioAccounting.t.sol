@@ -6,16 +6,20 @@ import { ProtocolFixture } from "./ProtocolFixture.sol";
 import {
     AdvanceRequest,
     CollateralDepositRequest,
+    DepositRejection,
     PositionState,
     RepaymentRequest
 } from "../src/TornaTypes.sol";
 
-/// @notice Continuous accounting proof for the implemented t0 through t5 path.
-/// @dev This deliberately uses one deployed contract and never resets state between timepoints.
+/// @notice Accounting proof for t0 through t6 and the independent t8 through t9b handlers.
+/// @dev One deployed contract is retained; t7's DB boundary remains outside this proof.
 contract ScenarioAccountingTest is ProtocolFixture {
     uint256 internal constant USDC = 1e6;
     bytes32 internal constant ACQUIRER_A = keccak256(bytes(unicode"ACQ-α"));
     bytes32 internal constant ACQUIRER_B = keccak256(bytes(unicode"ACQ-β"));
+    event AdvanceRejected(bytes32 indexed refundKey, uint8 reason);
+    event LiquidityDeposited(address indexed lp, uint256 amount);
+    event DepositRejected(address indexed lp, uint256 amount, uint8 reason);
 
     function setUp() public override {
         super.setUp();
@@ -49,7 +53,7 @@ contract ScenarioAccountingTest is ProtocolFixture {
         vm.warp(block.timestamp + 30 days);
     }
 
-    function testContinuousT0ThroughT5MatchesProjectAccounting() public {
+    function testT0ThroughT6AndIndependentT8ThroughT9bAccounting() public {
         _runT0();
         bytes32 yearlyLoss = _runT1();
         _runT2(yearlyLoss);
@@ -58,6 +62,11 @@ contract ScenarioAccountingTest is ProtocolFixture {
         bytes32[4] memory withdrawalAdvances = _runT4();
         _runT4b(withdrawalAdvances);
         _runT5();
+        _runT6();
+        // t7's DB retry is not simulated; later chain handlers use this t6 state.
+        _runT8();
+        _runT9();
+        _runT9b();
     }
 
     function _runT0() private {
@@ -192,6 +201,159 @@ contract ScenarioAccountingTest is ProtocolFixture {
         assertEq(torna.poolCapacity(), 7_638_584_000, "t5 NAV");
         assertEq(torna.totalAdvanceCount(), 375, "t5 count");
         assertEq(torna.totalAdvanced(), 375_000 * USDC, "t5 advanced");
+    }
+
+    function _runT6() private {
+        address vault = makeAddr("scenario-external-eoa");
+        uint256 amount = 3_638_880_000;
+        uint256 poolBefore = token.balanceOf(address(torna));
+        vm.startPrank(admin);
+        torna.setIdleVault(vault);
+        torna.grantRole(torna.TREASURY_ROLE(), admin);
+        torna.deployIdle(amount);
+        vm.stopPrank();
+
+        assertEq(token.balanceOf(address(torna)), poolBefore - amount, "t6 pool transferred");
+        assertEq(token.balanceOf(vault), amount, "t6 EOA received");
+        assertEq(torna.netAssetValue(), 7_638_584_000, "t6 NAV remains");
+        assertEq(torna.poolCapacity(), 3_999_704_000, "t6 available capital");
+        assertEq(torna.poolCash(), 2_999_704_000, "t6 pool cash");
+        assertEq(token.allowance(vault, address(torna)), 0, "t6 EOA did not approve");
+
+        vm.prank(admin);
+        torna.recallIdle(amount);
+        assertTrue(torna.externalFrozen(), "t6 freeze persists");
+        assertEq(torna.externalDeployed(), amount, "t6 capital remains external");
+        assertEq(token.balanceOf(vault), amount, "t6 failed recall keeps EOA funds");
+    }
+
+    function _runT8() private {
+        uint256 countBefore = torna.totalAdvanceCount();
+        uint256 advancedBefore = torna.totalAdvanced();
+        uint256 outstandingBefore = torna.totalOutstanding();
+        uint256 feesBefore = torna.totalLpFees();
+        uint256 reserveBefore = torna.reserveBalance();
+        uint256 hybridNonceBefore = torna.advanceNonces(issuers[0]);
+
+        AdvanceRequest memory duplicate = request();
+        duplicate.nonce = hybridNonceBefore;
+        bytes memory duplicateSignature = sign(duplicate);
+        vm.expectEmit(true, false, false, true, address(torna));
+        emit AdvanceRejected(duplicate.refundKey, 1);
+        vm.prank(submitter);
+        assertFalse(torna.advance(duplicate, duplicateSignature), "duplicate must be rejected");
+
+        AdvanceRequest memory unregistered = request();
+        unregistered.refundKey = keccak256(bytes("REF-UNKNOWN-99"));
+        unregistered.issuer = issuers[2];
+        unregistered.acquirerHash = keccak256(bytes(unicode"ACQ-γ"));
+        unregistered.nonce = torna.advanceNonces(issuers[2]);
+        vm.expectEmit(true, false, false, true, address(torna));
+        emit AdvanceRejected(unregistered.refundKey, 2);
+        vm.prank(submitter);
+        assertFalse(torna.advance(unregistered, ""), "unregistered issuer must be rejected");
+
+        AdvanceRequest memory wrongDomain = request();
+        wrongDomain.refundKey = keccak256(bytes("REF-2026-045"));
+        wrongDomain.nonce = hybridNonceBefore;
+        vm.chainId(31337);
+        bytes memory wrongSignature = sign(wrongDomain);
+        vm.chainId(10143);
+        vm.expectEmit(true, false, false, true, address(torna));
+        emit AdvanceRejected(wrongDomain.refundKey, 3);
+        vm.prank(submitter);
+        assertFalse(
+            torna.advance(wrongDomain, wrongSignature), "wrong-domain signature must be rejected"
+        );
+
+        assertEq(torna.totalAdvanceCount(), countBefore, "t8 count unchanged");
+        assertEq(torna.totalAdvanced(), advancedBefore, "t8 cumulative amount unchanged");
+        assertEq(torna.totalOutstanding(), outstandingBefore, "t8 outstanding unchanged");
+        assertEq(torna.totalLpFees(), feesBefore, "t8 fees unchanged");
+        assertEq(torna.reserveBalance(), reserveBefore, "t8 reserve unchanged");
+        assertEq(torna.advanceNonces(issuers[0]), hybridNonceBefore, "t8 nonce unchanged");
+        assertEq(torna.advanceNonces(issuers[2]), 0, "t8 new issuer nonce unchanged");
+    }
+
+    function _runT9() private {
+        bytes32 novaAcquirer = keccak256(bytes(unicode"ACQ-γ"));
+        bytes32 meridianAcquirer = keccak256(bytes(unicode"ACQ-δ"));
+        bytes32 kiteAcquirer = keccak256(bytes(unicode"ACQ-ε"));
+        vm.startPrank(admin);
+        torna.registerIssuer(issuers[2], novaAcquirer, "NOVA Travel Card");
+        torna.registerIssuer(issuers[3], meridianAcquirer, "MERIDIAN Travel Card");
+        torna.registerIssuer(issuers[4], kiteAcquirer, "KITE Travel Card");
+        vm.stopPrank();
+        _depositCollateral(2, 900 * USDC);
+        _depositCollateral(3, 750 * USDC);
+        _depositCollateral(4, 600 * USDC);
+        vm.prank(issuers[2]);
+        token.approve(address(torna), type(uint256).max);
+        vm.prank(issuers[3]);
+        token.approve(address(torna), type(uint256).max);
+
+        assertEq(torna.registeredIssuerCount(), 5, "t9 issuer count");
+        assertTrue(torna.isIssuerRamping(issuers[2]), "NOVA ramping");
+        assertTrue(torna.isIssuerRamping(issuers[3]), "MERIDIAN ramping");
+        assertTrue(torna.isIssuerRamping(issuers[4]), "KITE ramping");
+        _issue(2, novaAcquirer, keccak256(bytes("REF-2026-210")));
+        _issue(3, meridianAcquirer, keccak256(bytes("REF-2026-211")));
+
+        assertEq(torna.totalAdvanceCount(), 377, "t9 count");
+        assertEq(torna.totalAdvanced(), 377_000 * USDC, "t9 cumulative amount");
+        assertEq(torna.totalOutstanding(), 3_000 * USDC, "t9 outstanding");
+        assertEq(torna.totalLpFees(), 725_280_000, "t9 LP fees");
+        assertEq(torna.totalCollateral(), 5_050 * USDC, "t9 collateral");
+        assertEq(torna.netAssetValue(), 7_643_384_000, "t9 exact NAV");
+        assertEq(torna.poolCapacity(), 4_004_504_000, "t9 available after idle deployment");
+    }
+
+    function _runT9b() private {
+        assertEq(torna.totalLpPrincipal(), 8_000 * USDC, "t9b starting principal");
+        assertEq(torna.totalOutstanding(), 3_000 * USDC, "t9b starting outstanding");
+        uint256 navBefore = torna.netAssetValue();
+        uint256 lpFeesBefore = torna.totalLpFees();
+        uint256 lpLossBefore = torna.totalLpLoss();
+
+        _depositT9b(3, 12_000 * USDC, 4_166_666_666, uint8(DepositRejection.ConcentrationExceeded));
+        assertEq(torna.totalLpPrincipal(), 12_166_666_666, "t9b after LP-04");
+        _depositT9b(4, 6_000 * USDC, 4_166_666_666, uint8(DepositRejection.ConcentrationExceeded));
+        assertEq(torna.totalLpPrincipal(), 16_333_333_332, "t9b after LP-05");
+        _depositT9b(5, 4_000 * USDC, 333_333_334, uint8(DepositRejection.DepositCapExceeded));
+
+        assertEq(torna.lpPrincipal(lps[0]), 5_000 * USDC, "LP-01 remains 30% displayed");
+        assertEq(torna.lpPrincipal(lps[1]), 3_000 * USDC, "LP-02 remains 18% displayed");
+        assertEq(torna.lpPrincipal(lps[3]), 4_166_666_666, "LP-04 principal");
+        assertEq(torna.lpPrincipal(lps[4]), 4_166_666_666, "LP-05 principal");
+        assertEq(torna.lpPrincipal(lps[5]), 333_333_334, "LP-06 principal");
+        assertEq(torna.totalLpPrincipal(), 16_666_666_666, "t9b exact deposit cap");
+        assertEq(torna.liquidityDepositRoom(lps[5]), 0, "t9b pool room exhausted");
+        assertEq(torna.netAssetValue(), navBefore + 8_666_666_666, "t9b NAV only grows by deposits");
+        assertEq(torna.netAssetValue(), 16_310_050_666, "t9b exact NAV");
+        assertEq(torna.poolCapacity(), 12_671_170_666, "t9b external funds stay unavailable");
+        assertEq(
+            torna.issuerLimit(issuers[0]), 5_068_468_266, "t9b HYBRID limit uses available capital"
+        );
+        assertEq(torna.totalOutstanding(), 3_000 * USDC, "t9b outstanding unchanged");
+        assertEq(torna.totalLpFees(), lpFeesBefore, "t9b fees unchanged");
+        assertEq(torna.totalLpLoss(), lpLossBefore, "t9b loss unchanged");
+    }
+
+    function _depositT9b(uint256 lpIndex, uint256 requested, uint256 accepted, uint8 reason)
+        private
+    {
+        address lp = lps[lpIndex];
+        uint256 balanceBefore = token.balanceOf(lp);
+        assertEq(torna.liquidityDepositRoom(lp), accepted, "t9b room before deposit");
+        vm.prank(lp);
+        token.approve(address(torna), requested);
+        vm.expectEmit(true, false, false, true, address(torna));
+        emit LiquidityDeposited(lp, accepted);
+        vm.expectEmit(true, false, false, true, address(torna));
+        emit DepositRejected(lp, requested - accepted, reason);
+        vm.prank(lp);
+        assertEq(torna.depositLiquidity(requested), accepted, "t9b accepted amount");
+        assertEq(token.balanceOf(lp), balanceBefore - accepted, "t9b only accepted funds moved");
     }
 
     function _depositCollateral(uint256 issuerIndex, uint256 amount) private {

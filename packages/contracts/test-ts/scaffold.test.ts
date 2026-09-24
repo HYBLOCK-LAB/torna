@@ -77,9 +77,9 @@ test(
           !missingFeatures(scenarioPlan.at(-1)!).includes('liquidityDeposit'));
       assert.deepEqual(
           [...implementedScenarioHandlers],
-          ['t0', 't1', 't2', 't3', 't3b', 't4', 't4b', 't5']);
+          ['t0', 't1', 't2', 't3', 't3b', 't4', 't4b', 't5', 't6', 't7', 't8', 't9', 't9b']);
       assert.match(describePlan(), /PLAN ONLY/);
-      assert.match(describePlan(), /handlers are wired through t5/);
+      assert.match(describePlan(), /t7 requires real ledger IO/);
     });
 
 test(

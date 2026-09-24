@@ -16,6 +16,7 @@ import {
 import { executeScenario, executeT0 } from './scenarios/execute';
 import { describePlan } from './scenarios/plan';
 import { FullScenarioNotImplementedError } from './runtime/errors';
+import {preflightT7LedgerIO, type T7LedgerIO} from './runtime/ledger';
 import { loadLocalT0Config, type LocalT0Config } from './runtime/local-config';
 import {
   assertPublicT0RunContext,
@@ -27,9 +28,11 @@ import {
 } from './runtime/types';
 
 export const LOCAL_T0_TO_T5 = TIMEPOINT_ORDER.slice(0, 8);
+export const LOCAL_T0_TO_T6 = TIMEPOINT_ORDER.slice(0, 9);
+export const LOCAL_T0_TO_T7 = TIMEPOINT_ORDER.slice(0, 10);
 
 /**
- * The full PRD runner remains deliberately blocked. It cannot accidentally
+ * The full PROJECT_SPEC runner remains deliberately blocked. It cannot accidentally
  * deploy or write a partial 13-timepoint bundle through the generic CLI.
  */
 export const scaffoldRuntime: ScenarioRuntime = {
@@ -43,7 +46,7 @@ export const scaffoldRuntime: ScenarioRuntime = {
 
 /**
  * Full orchestration stays injectable for ordering/identity tests, but the
- * default has no implementation until every PRD timepoint is receipt-checked.
+ * default has no implementation until same-run DB labels and finalization work.
  */
 export async function runScenarios(runtime: ScenarioRuntime = scaffoldRuntime): Promise<void> {
   await runtime.preflight();
@@ -86,6 +89,24 @@ export function createLocalT0ToT5Runtime(config: LocalT0Config): LocalScenarioRu
     preflight: () => preflightLocalT0(session),
     deploy: () => deployProtocol(session),
     execute: (context, id) => executeScenario(session, context, id),
+    capture: (context, point) => captureScenarioSnapshot(session, context, point),
+    save: (context, snapshot) => saveScenarioSnapshot(context, snapshot),
+  };
+}
+
+export const createLocalT0ToT6Runtime = createLocalT0ToT5Runtime;
+
+/** Keep the DB handle private; bundle-producing callers must supply real ledger IO. */
+export function createLocalT0ToT7Runtime(
+    config: LocalT0Config, ledger: T7LedgerIO): LocalScenarioRuntime {
+  const session = createLocalT0Session(config);
+  return {
+    preflight: async () => {
+      await preflightLocalT0(session);
+      await preflightT7LedgerIO(ledger);
+    },
+    deploy: () => deployProtocol(session),
+    execute: (context, id) => executeScenario(session, context, id, ledger),
     capture: (context, point) => captureScenarioSnapshot(session, context, point),
     save: (context, snapshot) => saveScenarioSnapshot(context, snapshot),
   };
@@ -145,16 +166,40 @@ export async function runLocalT0(
 
 /**
  * Run and save only the receipt-checked t0 -> t5 segment. No manifest is written,
- * because a complete bundle still requires the unresolved t6+ handlers.
+ * because a complete bundle still requires t7 DB evidence and finalization.
  */
 export async function runLocalT0ToT5(
     runtime: LocalScenarioRuntime,
     onTimepointConfirmed?: (context: T0RunContext, point: CapturePoint) => void,
 ): Promise<void> {
+  return runLocalSegment(runtime, LOCAL_T0_TO_T5, onTimepointConfirmed);
+}
+
+/** One local deployment through t6; t7 and final bundle publication remain blocked. */
+export async function runLocalT0ToT6(
+    runtime: LocalScenarioRuntime,
+    onTimepointConfirmed?: (context: T0RunContext, point: CapturePoint) => void,
+): Promise<void> {
+  return runLocalSegment(runtime, LOCAL_T0_TO_T6, onTimepointConfirmed);
+}
+
+/** A local t0 -> t7 rehearsal with explicit ledger IO and C's retry job. */
+export async function runLocalT0ToT7(
+    runtime: LocalScenarioRuntime,
+    onTimepointConfirmed?: (context: T0RunContext, point: CapturePoint) => void,
+): Promise<void> {
+  return runLocalSegment(runtime, LOCAL_T0_TO_T7, onTimepointConfirmed);
+}
+
+async function runLocalSegment(
+    runtime: LocalScenarioRuntime,
+    timepoints: readonly typeof TIMEPOINT_ORDER[number][],
+    onTimepointConfirmed?: (context: T0RunContext, point: CapturePoint) => void,
+): Promise<void> {
   await runtime.preflight();
   const context = await runtime.deploy();
   let previousBlock = context.deploymentBlock;
-  for (const id of LOCAL_T0_TO_T5) {
+  for (const id of timepoints) {
     const point = await runtime.execute(context, id);
     assertPublicT0RunContext(context);
     if (point.timepointId !== id || point.blockNumber < previousBlock) {
@@ -198,7 +243,14 @@ async function main(): Promise<void> {
             `Confirmed ${point.timepointId} at block ${point.blockNumber.toString()}.`));
     return;
   }
-  throw new Error('Usage: run-scenarios.ts [--plan | --t0 | --through-t5 | --execute]');
+  if (args.length === 1 && args[0] === '--through-t6') {
+    await runLocalT0ToT6(
+        createLocalT0ToT6Runtime(loadLocalT0Config()),
+        (_context, point) => console.log(
+            `Confirmed ${point.timepointId} at block ${point.blockNumber.toString()}.`));
+    return;
+  }
+  throw new Error('Usage: run-scenarios.ts [--plan | --t0 | --through-t5 | --through-t6 | --execute]');
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

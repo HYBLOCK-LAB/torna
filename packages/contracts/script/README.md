@@ -1,6 +1,6 @@
 # Local scenario runner and boundaries
 
-Scope: Minseo's contract deployment, t0-through-t5 orchestration and snapshot boundary. The
+Scope: Minseo's contract deployment, t0-through-t6 CLI, injectable t7 ledger bridge and snapshot boundary. The
 web, adapter and ledger packages are not modified. Viewing the plan does not read
 secrets, contact an RPC endpoint, deploy contracts or create files.
 
@@ -9,15 +9,16 @@ secrets, contact an RPC endpoint, deploy contracts or create files.
 ```text
 script/
   deploy.ts                 local-only preflight, receipt-confirmed deployment
-  run-scenarios.ts          plan CLI, local t0/t0-through-t5 commands, full-run guard
+  run-scenarios.ts          plan CLI, local t0/t0-through-t6 commands, private t7 runtime, full-run guard
   snapshot.ts               block-pinned chain capture and no-overwrite writer
   runtime/
     local-config.ts         explicit local environment parsing and account derivation
+    ledger.ts               C ledger loader and read-only pre-run checks
     types.ts                public context; signing material is excluded
     errors.ts               explicit configuration and unsupported-state errors
   scenarios/
     plan.ts                 all 13 PRD timepoints and prerequisites
-    execute.ts              receipt-checked t0-through-t5 paths; t6+ blocked
+    execute.ts              receipt-checked t0-through-t7 plus separate t8/t9/t9b handlers
 ```
 
 `scenario:plan` is always safe and does not access a chain:
@@ -26,21 +27,53 @@ script/
 corepack pnpm --filter @torna/contracts scenario:plan
 ```
 
-`--execute` deliberately exits nonzero until t6+ and finalization are ready. It does not
+`--execute` deliberately exits nonzero until DB-backed full-run finalization is ready. It does not
 deploy contracts or write a partial 13-timepoint bundle. The narrow t0 smoke path remains:
 
 ```bash
 corepack pnpm --filter @torna/contracts scenario:t0
 ```
 
+The local t0 rehearsal now calls C's `advanceRefund` and `repayRefund` from
+`@torna/adapter`. The adapter hashes the identifiers, converts the two-decimal
+amount, signs the action and Permit, submits with the index-2 wallet, and checks
+the matching Torna events. The runner still checks its exact t0 accounting and
+captures chain state. Its input is the example row from PROJECT_SPEC 10.6, **not**
+a DB query: no `creditLedger` call or cardholder-balance update is claimed by this
+command. The remaining scenario advances still use the local contract driver.
+The adapter currently computes maturity from `max(confirmed_at, chain time)` plus
+five business days; its README marks that historical-data rule as an assumption,
+so it is not yet an approved replacement for PROJECT_SPEC 10.6.
+
+The DB-backed path loads the seeded `REF-2026-001` row through C's ledger package.
+At t0, C's `processRefund` commits the real card-ledger credit, then the injected
+callback simulates a lost success response. The adapter queues the retry, while the
+cardholder balance is already 1,300.00 and `ledger_credits` contains one row. This
+is Minseo's 2026-09-24 interpretation of the same-key t0/t7 sample; it is not a
+claim of a separate team-lead approval. At t7, only C's `runLedgerRetryJob` may call
+`confirmLedgerCredit`: it must prove a matching `AdvanceIssued` log, prior DB
+failure and retry-pending state, exactly one resulting `ledger_credits` row,
+and no prior `LedgerCreditConfirmed` event. The ordinary advance path must never
+call it. The retry returns `credited=false` because the first DB commit already
+landed; the runner requires one acknowledgement, no duplicate balance increase and
+no new advance.
+
+The exported `loadT7LedgerIO`, `createLocalT0ToT7Runtime` and `runLocalT0ToT7`
+connect this path, but no CLI command writes to a shared DB implicitly. Use the
+DB-backed runtime only with a fresh, authorized test database. The project Supabase
+was checked read-only for schema and pre-run state; it was not reset or mutated.
+The focused Anvil test uses an in-memory stand-in and proves chain/adapter behavior,
+not Postgres durability. A continuous DB-backed t0-through-t7 run is still pending.
+
 The currently implemented continuous segment has a separate, explicitly partial command:
 
 ```bash
-corepack pnpm --filter @torna/contracts scenario:t5
+corepack pnpm --filter @torna/contracts scenario:t6
 ```
 
 It deploys once, executes and immediately saves `t0`, `t1`, `t2`, `t3`, `t3b`, `t4`,
-`t4b` and `t5`. It does not create a final bundle manifest or pretend t6+ succeeded.
+`t4b`, `t5` and `t6`. It does not create a final bundle manifest or pretend t7+ succeeded.
+The old `scenario:t5` command remains available for a shorter regression rehearsal.
 
 ## Explicit local configuration
 
@@ -56,8 +89,8 @@ Testnet, so it is intentionally not consumed by this local runner.
 | `RUN_ID` | A new ID in the form `run-local-...`; it is used only if capture can safely write output. |
 
 The runner derives the PRD account allocation from that mnemonic: deployer index 0,
-verifier 1, submitter 2, five issuers at 3–7, and LP-01 through LP-06 at 8–13.
-Start Anvil with **at least 14 accounts**. It checks the RPC-reported chain ID and gas balance for every account that
+verifier 1, submitter 2, five issuers at 3–7, LP-01 through LP-06 at 8–13,
+and the external idle EOA at 14. Start Anvil with **at least 15 accounts**. It checks the RPC-reported chain ID and gas balance for every account that
 sends a transaction before deployment. The runtime keeps signing accounts in a private
 closure; `RunContext` contains only public addresses, contract addresses, block numbers
 and confirmed transaction hashes.
@@ -67,7 +100,7 @@ mnemonic yourself, keep it in that terminal session only, and do not commit it o
 it into source files:
 
 ```bash
-anvil --host 127.0.0.1 --port 8545 --chain-id 31337 --accounts 14 --mnemonic "$TORNA_LOCAL_MNEMONIC"
+anvil --host 127.0.0.1 --port 8545 --chain-id 31337 --accounts 15 --mnemonic "$TORNA_LOCAL_MNEMONIC"
 ```
 
 The runner requires the same session-local mnemonic in its own environment. The t0 command
@@ -83,8 +116,8 @@ The required t0 sequence is receipt-confirmed in this order:
 3. Register HYBRID and AURA, advance only the local EVM clock by 30 days and confirm ramp-up ended.
 4. Submit issuer-signed Permit-backed collateral deposits (3,000 and 600 USDC).
 5. Seed the one-time 500 USDC reserve.
-6. Submit a signed 1,000 USDC advance and require a matching `AdvanceIssued` event.
-7. Submit the issuer-signed full-principal repayment and require a matching `AdvanceRepaid` event.
+6. Ask the adapter to submit a signed 1,000 USDC advance and require a matching `AdvanceIssued` event.
+7. Ask the adapter to submit the issuer-signed full-principal repayment and require a matching `AdvanceRepaid` event.
 
 Issuers sign data but do not send a transaction or pay gas. The submitter pays gas for
 the relayed collateral, advance and repayment calls; LPs pay gas for their own initial
@@ -112,16 +145,25 @@ corepack pnpm --filter @torna/contracts check
 ```
 
 TypeScript tests cover missing local configuration, chain-ID/loopback rejection, public
-context secrecy, t0 call order, t0-through-t5 capture order and the rule that a missing
+context secrecy, t0 call order, t0-through-t7 capture order and the rule that a missing
 required receipt event blocks capture and snapshot saving. They use in-memory fixtures
 only; they are not chain integration evidence.
 
 `test/T0Scenario.t.sol` covers the narrow normal path. `test/ScenarioAccounting.t.sol`
-keeps one deployed contract alive through t0–t5 and verifies 375 cumulative advances,
-loss/cap/recovery accounting, the request-only t4 snapshot boundary and repayment-triggered
-LP exit. These are Foundry proofs, not an Anvil run or complete generated bundle.
+keeps one deployed contract alive through t0–t6 and independently exercises t8/t9/t9b
+without t7. `test/IdleDeployment.t.sol` separately proves t6's real transfer, NAV-based
+50% cap, role separation, failed recall freeze and successful approved recall. These verify
+loss/cap/recovery, the t4 request boundary, repayment-triggered
+LP exit, three rejected requests, three issuer registrations, two new advances and exact
+six-decimal partial LP deposits. These are Foundry proofs, not an Anvil run or complete bundle.
 
-The remaining PRD handlers (`t6` through `t9b`), generated bundle manifest and Minjae's
-label map are still external dependencies or scaffolds. Do not describe this as an
+The t8 rejection, t9 issuer-expansion and t9b partial-deposit handlers are implemented
+separately, but a complete DB-backed continuous run and bundle are not yet verified.
+The t9b handler applies the section 7 deposit-cap formula in six-decimal base units;
+the rounded sample values are not implementation targets. The t6 local handler moves
+3,638.88 MockUSDC to an external EOA, leaves its allowance unset, and verifies both
+token balances and the freeze event before capture. The t7 handler now delegates
+to C's retry job; the generated bundle manifest and same-run label map are still
+external dependencies or scaffolds. Do not describe this as an
 executed 13-timepoint bundle until all handlers run on a local chain, capture every schema
 field from authoritative sources and `pnpm verify:bundle` succeeds on that generated run.

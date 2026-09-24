@@ -29,6 +29,7 @@ export interface LocalT0Actors {
   lp04: Address;
   lp05: Address;
   lp06: Address;
+  idleVault: Address;
 }
 
 export interface ConfirmedTransaction {

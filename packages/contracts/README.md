@@ -321,9 +321,10 @@ This is a host-tool startup failure, not a Solidity test failure.
 The local scenario runner and its remaining boundaries are documented in
 [script/README.md](script/README.md). `corepack pnpm --filter @torna/contracts scenario:plan`
 displays the 13-timepoint plan without chain access. `scenario:t0` remains the narrow
-smoke command, while `scenario:t5` runs and saves the continuous implemented segment from
-t0 through t5. Receipt-checked handlers and chain-derived capture are implemented through
-t5, while t6+ and final bundle output remain unavailable.
+smoke command, while `scenario:t6` runs and saves the continuous implemented segment from
+t0 through t6. Receipt-checked handlers and chain-derived capture are implemented through
+t6 and separately for t8/t9/t9b. The t7 gap still blocks the continuous run
+and final bundle output.
 
 - src/Torna.sol: roles, initial/ordinary liquidity, reserve, collateral, issuer/ramp
   queries, signed advances and full-principal repayments.
@@ -345,9 +346,13 @@ the same pure calculations and keeps event grouping in Torna.
 
 ## Next implementation gate
 
-Initial funding follows the approved D01 decision. Loss, recovery and LP withdrawal are
-implemented through t5. Resolve the remaining t6 idle-deployment and t7 ledger-retry
-decisions in DECISIONS.md before extending the full timepoint runner.
+Initial funding follows the approved D01 decision. Loss, recovery, LP withdrawal and
+actual external-EOA idle deployment are implemented through t6. The t6 recall failure
+uses the EOA's absent MockUSDC allowance, rather than a simulated failure. Resolve the
+remaining t7 adapter/ledger boundary before extending the full timepoint runner.
+`confirmLedgerCredit(refundKey)` is now the SUBMITTER_ROLE-only retry acknowledgment;
+it records one event for an existing position and never changes monetary accounting.
+The adapter must check the actual DB row first. This contract cannot prove a DB write.
 `shared/abi/Torna.json` is generated from the current compiled implementation.
 Regenerate with `export:abi` after interface changes; do not hand-edit it.
 

@@ -53,6 +53,11 @@ function asBigInt(value: unknown, field: string): bigint {
   return value;
 }
 
+function asBoolean(value: unknown, field: string): boolean {
+  if (typeof value !== 'boolean') throw new Error(`Torna ${field} returned a non-boolean value.`);
+  return value;
+}
+
 function enumIndex(value: unknown, field: string): number {
   const index = typeof value === 'bigint' ? Number(value) : value;
   if (typeof index !== 'number' || !Number.isSafeInteger(index) || index < 0) {
@@ -78,6 +83,12 @@ function toUsdc(value: bigint): number {
 function pct(numerator: bigint, denominator: bigint): number {
   if (denominator === 0n) return 0;
   return Number(numerator * 1_000_000n / denominator) / 10_000;
+}
+
+/** Round only the displayed LP percentage; deposit-cap math keeps every base unit. */
+export function lpSharePct(principal: bigint, totalPrincipal: bigint): number {
+  if (totalPrincipal === 0n) return 0;
+  return Number((principal * 10_000n + totalPrincipal / 2n) / totalPrincipal) / 100;
 }
 
 function argsOf(log: ParsedLog): Record<string, unknown> {
@@ -237,7 +248,7 @@ async function readLps(
   return principals.filter(item => item.principal > 0n).map(item => ({
     name: item.name,
     deposit: toUsdc(item.principal),
-    sharePct: pct(item.principal, totalPrincipal),
+    sharePct: lpSharePct(item.principal, totalPrincipal),
   }));
 }
 
@@ -270,14 +281,18 @@ export async function captureScenarioSnapshot(
   const {torna} = loadProtocolArtifacts();
   const logs = await readAllLogs(session, context, point);
   const [
-    totalPrincipalValue, totalFeesValue, totalLpLossValue, capacityValue,
-    outstandingValue, reserveValue, protocolValue, totalLossValue,
-    countValue, advancedValue,
+    totalPrincipalValue, totalFeesValue, totalLpLossValue, navValue, capacityValue,
+    cashValue, deployedValue, frozenValue, outstandingValue, reserveValue,
+    protocolValue, totalLossValue, countValue, advancedValue,
   ] = await Promise.all([
     readContractValue(session, context.torna, torna.abi, 'totalLpPrincipal', [], point.blockNumber),
     readContractValue(session, context.torna, torna.abi, 'totalLpFees', [], point.blockNumber),
     readContractValue(session, context.torna, torna.abi, 'totalLpLoss', [], point.blockNumber),
+    readContractValue(session, context.torna, torna.abi, 'netAssetValue', [], point.blockNumber),
     readContractValue(session, context.torna, torna.abi, 'poolCapacity', [], point.blockNumber),
+    readContractValue(session, context.torna, torna.abi, 'poolCash', [], point.blockNumber),
+    readContractValue(session, context.torna, torna.abi, 'externalDeployed', [], point.blockNumber),
+    readContractValue(session, context.torna, torna.abi, 'externalFrozen', [], point.blockNumber),
     readContractValue(session, context.torna, torna.abi, 'totalOutstanding', [], point.blockNumber),
     readContractValue(session, context.torna, torna.abi, 'reserveBalance', [], point.blockNumber),
     readContractValue(session, context.torna, torna.abi, 'protocolFees', [], point.blockNumber),
@@ -288,7 +303,11 @@ export async function captureScenarioSnapshot(
   const totalPrincipal = asBigInt(totalPrincipalValue, 'totalLpPrincipal');
   const totalFees = asBigInt(totalFeesValue, 'totalLpFees');
   const totalLpLoss = asBigInt(totalLpLossValue, 'totalLpLoss');
+  const nav = asBigInt(navValue, 'netAssetValue');
   const capacity = asBigInt(capacityValue, 'poolCapacity');
+  const cash = asBigInt(cashValue, 'poolCash');
+  const deployed = asBigInt(deployedValue, 'externalDeployed');
+  const frozen = asBoolean(frozenValue, 'externalFrozen');
   const outstanding = asBigInt(outstandingValue, 'totalOutstanding');
   const reserve = asBigInt(reserveValue, 'reserveBalance');
   const protocol = asBigInt(protocolValue, 'protocolFees');
@@ -338,14 +357,14 @@ export async function captureScenarioSnapshot(
       lpDeposits: toUsdc(totalPrincipal),
       lpFeeAccrued: toUsdc(totalFees),
       lpLossApplied: toUsdc(totalLpLoss),
-      netAssetValue: toUsdc(capacity),
+      netAssetValue: toUsdc(nav),
       advancedOutstanding: toUsdc(outstanding),
-      cashAvailable: toUsdc(capacity - outstanding),
+      cashAvailable: toUsdc(cash),
       reserve: toUsdc(reserve),
       reserveUsed: toUsdc(reserveUsed),
       capHeld: toUsdc(capHeld),
-      externalDeployed: 0,
-      externalFrozen: false,
+      externalDeployed: toUsdc(deployed),
+      externalFrozen: frozen,
       protocolFee: toUsdc(protocol),
     },
     issuers,
@@ -357,7 +376,7 @@ export async function captureScenarioSnapshot(
       lossTotal: toUsdc(totalLoss),
       lossRatePct: pct(totalLoss, advanced),
       repayRatePct: count === 0n ? 100 : Number(repaid) * 100 / Number(count),
-      utilizationPct: pct(outstanding, capacity),
+      utilizationPct: pct(outstanding, nav),
       acquirerTopExposure: toUsdc(topExposure),
       acquirerExposureLimit: toUsdc(capacity / 2n),
       lpDepositCap: toUsdc(depositBase * 10_000n / 3_000n),
@@ -429,7 +448,7 @@ export async function saveSnapshot(_context: RunContext, _snapshot: Snapshot): P
   throw new FullScenarioNotImplementedError();
 }
 
-/** There is no complete generated bundle until t6+ and the same-run label map are available. */
+/** There is no complete generated bundle until t7 and the same-run label map are available. */
 export async function finalizeBundle(_context: RunContext): Promise<void> {
   throw new FullScenarioNotImplementedError();
 }
