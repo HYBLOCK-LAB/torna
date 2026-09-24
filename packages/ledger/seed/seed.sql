@@ -34,7 +34,7 @@
 
 begin;
 
-truncate public.ledger_credits, public.refunds, public.transactions,
+truncate public.ledger_credit_retries, public.ledger_credits, public.refunds, public.transactions,
          public.cardholders, public.issuers, public.acquirers
   restart identity cascade;
 
