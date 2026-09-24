@@ -18,6 +18,7 @@
 begin;
 
 drop function if exists public.credit_ledger(text, numeric, text);
+drop table if exists public.ledger_credit_retries cascade;
 drop table if exists public.ledger_credits cascade;
 drop table if exists public.refunds        cascade;
 drop table if exists public.transactions   cascade;
@@ -131,6 +132,24 @@ create table public.ledger_credits (
 );
 
 -- ---------------------------------------------------------------------------
+-- ledger_credit_retries — refunds whose ledger write FAILED after the advance
+-- succeeded on chain (timepoint t7). Only rows here are eligible for the
+-- on-chain LedgerCreditConfirmed acknowledgement; a refund credited on the
+-- first try never enters this table, so the normal path never confirms.
+-- One row per refund (primary key); confirmed_tx_hash is set once the
+-- acknowledgement is on chain, which closes the row.
+-- ---------------------------------------------------------------------------
+create table public.ledger_credit_retries (
+  refund_key        text primary key references public.refunds (refund_key),
+  advance_tx_hash   text check (advance_tx_hash ~ '^0x[0-9a-f]{64}$'),
+  last_error        text,
+  attempts          integer not null default 1 check (attempts > 0),
+  enqueued_at       timestamptz not null default now(),
+  confirmed_tx_hash text check (confirmed_tx_hash ~ '^0x[0-9a-f]{64}$'),
+  confirmed_at      timestamptz
+);
+
+-- ---------------------------------------------------------------------------
 -- credit_ledger — idempotent balance restoration.
 -- Returns true if this call credited the balance, false if the refund_key
 -- was already credited. Insert and balance update happen in one statement
@@ -183,10 +202,12 @@ alter table public.cardholders    enable row level security;
 alter table public.transactions   enable row level security;
 alter table public.refunds        enable row level security;
 alter table public.ledger_credits enable row level security;
+alter table public.ledger_credit_retries enable row level security;
 
 grant select, insert, update, delete
   on public.acquirers, public.issuers, public.cardholders,
-     public.transactions, public.refunds, public.ledger_credits
+     public.transactions, public.refunds, public.ledger_credits,
+     public.ledger_credit_retries
   to service_role;
 grant usage, select on all sequences in schema public to service_role;
 revoke execute on function public.credit_ledger(text, numeric, text) from public, anon, authenticated;

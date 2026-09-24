@@ -44,6 +44,45 @@ const out = await processRefund({
 - 상환은 `repayRefund` — 발급사가 `RepaymentRequest` 와 원금 Permit에 서명하고 제출자가 보냅니다.
 - 라벨 덤프는 `import { keccak256 } from '@torna/adapter/hash'` 로 같은 해시 함수를 씁니다.
 
+## t7 원장 재시도 잡 (2026-09-24 확정)
+
+`LedgerCreditConfirmed`는 **재시도 잡에서만** 남깁니다. 정상 선지급 경로(`processRefund`)는 절대 부르지 않습니다.
+
+```ts
+import { processRefund, runLedgerRetryJob } from '@torna/adapter';
+import { connect, creditLedger, ledgerRetryStore } from '@torna/ledger';
+
+const store = ledgerRetryStore(sql);
+
+// 정상 경로: 원장 반영이 실패하면 예외 대신 대기열에 넣고 retryQueued=true
+await processRefund({
+  clients, deployment, issuer, row, retryStore: store,
+  creditLedger: (key, amount, tx) => creditLedger(sql, key, amount, tx),
+});
+
+// 재시도 잡: 대기 건만 처리
+const outcomes = await runLedgerRetryJob({ clients, deployment, store });
+// [{ refundKey, status: 'confirmed', credited, txHash, blockNumber }] 등
+```
+
+`confirmLedgerCredit(refundKey)`는 아래 네 조건이 전부 참일 때 한 번만 나갑니다.
+
+1. 체인에 포지션이 있고, 기록된 선지급 트랜잭션에 **일치하는 `AdvanceIssued` 로그**가 있다
+2. 그 환불이 원장 반영 실패로 **재시도 대기열**(`ledger_credit_retries`)에 있다
+3. 재반영 후 `ledger_credits`에 그 키의 행이 **정확히 1건**이다
+4. 아직 확인되지 않았다 — DB 대기 건이 열려 있고, 호출 전 시뮬레이션에서 컨트랙트가 거부하지 않는다
+
+한 조건이라도 어긋나면 그 건은 `skipped`로 남고 다음 실행 때 다시 봅니다. 잡을 여러 번 돌려도 확인 기록은 하나만 남습니다.
+
+시나리오 실행에서 원장 장애를 재현할 때는 해당 건의 `creditLedger`만 실패하게 넘기면 됩니다.
+
+```ts
+await processRefund({ ..., retryStore: store,
+  creditLedger: async () => { throw new Error('simulated ledger outage'); } });
+```
+
+`confirmLedgerCredit`의 함수 정의는 `shared/abi`에 올라오기 전까지 `src/ledgerAck.ts`에 한 줄로 두었고, `Torna.json`에 함수가 생기면 `test/conformance.test.ts`가 자동으로 형식을 대조합니다.
+
 ## 검증
 
 ```bash
@@ -51,7 +90,7 @@ pnpm --filter @torna/adapter test        # shared/abi/fixtures 의 digest 와 �
 pnpm --filter @torna/adapter typecheck
 ```
 
-로컬 anvil 미니 통합은 `packages/ledger/scripts/mini-integration.ts` 에 있습니다.
+로컬 anvil 스모크 테스트: `pnpm --filter @torna/adapter smoke` (상단 주석의 환경 변수 필요, DB 없이 메모리 원장 사용)
 
 ## 만기 규칙 (2026-09-23 확정)
 

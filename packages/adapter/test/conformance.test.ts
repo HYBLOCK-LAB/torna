@@ -12,6 +12,7 @@ import {
   hashPermit,
   hashRepaymentRequest,
   keccak256,
+  ledgerAckAbi,
   refundKeyOf,
 } from '../src/index';
 
@@ -57,3 +58,17 @@ test('MockUSDC Permit EIP-712 digest matches the fixture', () => {
   );
   assert.equal(digest, f.expected.digest);
 });
+
+const tornaAbi = JSON.parse(readFileSync(new URL('../../../shared/abi/Torna.json', import.meta.url), 'utf8'));
+const compiledAck = (Array.isArray(tornaAbi) ? tornaAbi : tornaAbi.abi)
+  .find((e: { type: string; name?: string }) => e.type === 'function' && e.name === 'confirmLedgerCredit');
+
+test('confirmLedgerCredit fragment matches the compiled Torna ABI',
+  { skip: compiledAck ? false : 'shared/abi/Torna.json does not export confirmLedgerCredit yet' }, () => {
+    const [fragment] = ledgerAckAbi;
+    assert.deepEqual(
+      compiledAck.inputs.map((i: { type: string }) => i.type),
+      fragment.inputs.map(i => i.type),
+    );
+    assert.equal(compiledAck.stateMutability, 'nonpayable');
+  });

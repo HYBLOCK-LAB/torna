@@ -61,4 +61,25 @@ await creditLedger(sql, refundKey, '1000.00', txHash);   // true = 반영, false
 ```
 
 - 테스트: `TEST_DATABASE_URL=<로컬 버림용 Postgres> pnpm --filter @torna/ledger test` (Supabase 주소면 실행을 거부합니다)
-- 미니 통합(로컬 anvil + 로컬 Postgres): `scripts/mini-integration.ts` 상단 주석 참고
+- 체인 쪽 로컬 스모크 테스트는 `packages/adapter/scripts/local-smoke.ts` (원장 패키지는 DB만 알고 체인은 모릅니다)
+
+## t7 재시도 대기열 (`ledger_credit_retries`)
+
+선지급은 체인에서 성공했는데 원장 반영이 실패한 환불만 이 테이블에 들어갑니다. 한 번에 성공한 환불은 들어오지 않으므로, 정상 경로는 온체인 확인 기록(`LedgerCreditConfirmed`)을 절대 남기지 않습니다.
+
+```ts
+import { connect, creditLedger, ledgerRetryStore } from '@torna/ledger';
+import { processRefund, runLedgerRetryJob } from '@torna/adapter';
+
+const sql = connect();
+const store = ledgerRetryStore(sql);   // enqueue · pending · credit · creditCount · markConfirmed · noteFailure
+```
+
+| 함수 | 역할 |
+|---|---|
+| `enqueueLedgerRetry` | 원장 반영 실패 시 대기열에 넣음 (환불당 한 행, 재실패 시 attempts 증가) |
+| `listPendingLedgerRetries` | 아직 온체인 확인 전인 대기 건 (조건 2) |
+| `retryLedgerCredit` | DB 금액 그대로 `credit_ledger` 재실행 (멱등) |
+| `countLedgerCredits` | `ledger_credits` 행 수 — 정확히 1이어야 함 (조건 3) |
+| `markLedgerRetryConfirmed` | 확인 트랜잭션 해시를 기록하고 대기 건을 닫음 (조건 4, DB 쪽) |
+
