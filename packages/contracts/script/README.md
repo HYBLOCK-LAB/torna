@@ -1,6 +1,6 @@
 # Local scenario runner and boundaries
 
-Scope: Minseo's contract deployment, t0-through-t6 CLI, injectable t7 ledger bridge and snapshot boundary. The
+Scope: Minseo's local contract deployment, all 13 scenario points, ledger retry and snapshot bundle. The
 web, adapter and ledger packages are not modified. Viewing the plan does not read
 secrets, contact an RPC endpoint, deploy contracts or create files.
 
@@ -9,8 +9,8 @@ secrets, contact an RPC endpoint, deploy contracts or create files.
 ```text
 script/
   deploy.ts                 local-only preflight, receipt-confirmed deployment
-  run-scenarios.ts          plan CLI, local t0/t0-through-t6 commands, private t7 runtime, full-run guard
-  snapshot.ts               block-pinned chain capture and no-overwrite writer
+  run-scenarios.ts          plan, partial rehearsals and explicit local-only full-bundle command
+  snapshot.ts               block-pinned chain capture, no-overwrite writer and checked manifest
   runtime/
     local-config.ts         explicit local environment parsing and account derivation
     ledger.ts               C ledger loader and read-only pre-run checks
@@ -27,8 +27,8 @@ script/
 corepack pnpm --filter @torna/contracts scenario:plan
 ```
 
-`--execute` deliberately exits nonzero until DB-backed full-run finalization is ready. It does not
-deploy contracts or write a partial 13-timepoint bundle. The narrow t0 smoke path remains:
+The generic `--execute` entry point remains blocked; it must not be mistaken for a
+testnet deployment command. The narrow t0 smoke path remains:
 
 ```bash
 corepack pnpm --filter @torna/contracts scenario:t0
@@ -58,12 +58,12 @@ call it. The retry returns `credited=false` because the first DB commit already
 landed; the runner requires one acknowledgement, no duplicate balance increase and
 no new advance.
 
-The exported `loadT7LedgerIO`, `createLocalT0ToT7Runtime` and `runLocalT0ToT7`
-connect this path, but no CLI command writes to a shared DB implicitly. Use the
-DB-backed runtime only with a fresh, authorized test database. The project Supabase
-was checked read-only for schema and pre-run state; it was not reset or mutated.
-The focused Anvil test uses an in-memory stand-in and proves chain/adapter behavior,
-not Postgres durability. A continuous DB-backed t0-through-t7 run is still pending.
+The explicit full-run command accepts only a loopback PostgreSQL URL and local EVM
+RPC. It reads all 378 seeded refund rows, uses their adapter-derived keys in the
+scenario, and calls C's label-map builder once after all 13 captures. It refuses
+an existing snapshot directory or label file. The project Supabase was checked
+read-only; it was not reset or mutated. The focused Anvil test uses an in-memory
+stand-in, while the complete local run uses a real throwaway Postgres database.
 
 The currently implemented continuous segment has a separate, explicitly partial command:
 
@@ -75,9 +75,22 @@ It deploys once, executes and immediately saves `t0`, `t1`, `t2`, `t3`, `t3b`, `
 `t4b`, `t5` and `t6`. It does not create a final bundle manifest or pretend t7+ succeeded.
 The old `scenario:t5` command remains available for a shorter regression rehearsal.
 
+For a fresh local Anvil and disposable Postgres seeded with C's ledger reset, set
+the four local EVM variables below plus `DATABASE_URL` for that **loopback test DB**.
+Then run from the repository root:
+
+```bash
+corepack pnpm --filter @torna/contracts scenario:local-bundle
+corepack pnpm verify:bundle shared/snapshots/$RUN_ID
+```
+
+The first command saves all 13 snapshots, C's same-run DB label map and a manifest.
+The second is the independent acceptance check. The local 2026-09-24 rehearsal
+passed this check; it is not a Monad Testnet execution or submission bundle.
+
 ## Explicit local configuration
 
-Both local commands require every setting below. There is no fallback mnemonic,
+Local chain commands require every setting below. There is no fallback mnemonic,
 RPC URL, account list or chain ID. The existing root `.env.example` is for Monad
 Testnet, so it is intentionally not consumed by this local runner.
 
@@ -157,13 +170,13 @@ loss/cap/recovery, the t4 request boundary, repayment-triggered
 LP exit, three rejected requests, three issuer registrations, two new advances and exact
 six-decimal partial LP deposits. These are Foundry proofs, not an Anvil run or complete bundle.
 
-The t8 rejection, t9 issuer-expansion and t9b partial-deposit handlers are implemented
-separately, but a complete DB-backed continuous run and bundle are not yet verified.
+The t8 rejection, t9 issuer-expansion and t9b partial-deposit handlers are connected
+to the same local run. The 2026-09-24 disposable-DB rehearsal generated and passed
+`verify:bundle` on 13 snapshots.
 The t9b handler applies the section 7 deposit-cap formula in six-decimal base units;
 the rounded sample values are not implementation targets. The t6 local handler moves
 3,638.88 MockUSDC to an external EOA, leaves its allowance unset, and verifies both
 token balances and the freeze event before capture. The t7 handler now delegates
-to C's retry job; the generated bundle manifest and same-run label map are still
-external dependencies or scaffolds. Do not describe this as an
-executed 13-timepoint bundle until all handlers run on a local chain, capture every schema
-field from authoritative sources and `pnpm verify:bundle` succeeds on that generated run.
+to C's retry job. The manifest is written only after all snapshots and C's
+same-run label map are checked. The local result still does not prove a testnet
+deployment, gas budget or frontend narrative validation.

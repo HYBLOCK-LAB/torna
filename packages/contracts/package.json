@@ -10,6 +10,7 @@
     "scenario:t0": "forge build --root . && node --import tsx script/run-scenarios.ts --t0",
     "scenario:t5": "forge build --root . && node --import tsx script/run-scenarios.ts --through-t5",
     "scenario:t6": "forge build --root . && node --import tsx script/run-scenarios.ts --through-t6",
+    "scenario:local-bundle": "forge build --root . && node --import tsx script/run-scenarios.ts --through-t9b",
     "check": "forge fmt --check --root . && forge build --root . && node script/export-abi.mjs --check && tsc --project tsconfig.json && forge test --root . && node --import tsx --test test-ts/*.test.ts",
     "test": "forge test --root . && node --import tsx --test test-ts/*.test.ts",
     "test:shared": "forge build --root . && node --import tsx --test test-ts/*.test.ts",

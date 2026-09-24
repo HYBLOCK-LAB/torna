@@ -103,7 +103,7 @@ export function missingFeatures(step: ScenarioPlan): Feature[] {
 export function describePlan(): string {
   return [
     'Torna scenario plan — PLAN ONLY; no RPC, wallets, transactions or files.',
-    'Local handlers exist through t7 and for t8/t9/t9b; t7 requires real ledger IO, and full bundle output remains unavailable.',
+    'All 13 local handlers are wired; a full local bundle requires a fresh loopback Postgres ledger and Anvil. Testnet execution remains separate.',
     ...scenarioPlan.map(step => {
       const missing = missingFeatures(step);
       return `${step.id}: ${step.description}\n  Missing features: ${

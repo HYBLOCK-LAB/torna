@@ -1,4 +1,4 @@
-import {access, mkdir, writeFile} from 'node:fs/promises';
+import {access, mkdir, readFile, writeFile} from 'node:fs/promises';
 import {relative, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
@@ -6,8 +6,10 @@ import {parseEventLogs, type Address, type Hex} from 'viem';
 
 import {
   TIMEPOINT_ORDER,
+  type BundleManifest,
   type EventLogEntry,
   type IssuerSnapshot,
+  type LabelMap,
   type LiquidityProviderSnapshot,
   type PositionSnapshot,
   type PositionState,
@@ -258,12 +260,18 @@ function eventEntries(context: T0RunContext, logs: ParsedLog[]): EventLogEntry[]
       throw new Error(`${log.eventName} log has no confirmed transaction identity.`);
     }
     const args = argsOf(log);
-    const target = args.refundKey ?? args.issuer ?? args.lp ?? args.acquirerHash ?? 'protocol';
+    const rawTarget = args.refundKey ?? args.issuer ?? args.lp ?? args.acquirerHash ?? 'protocol';
+    let target = String(rawTarget);
+    if (/^0x[0-9a-fA-F]{40}$/.test(target)) {
+      const lp = lpActors(context).find(([, address]) =>
+        address.toLowerCase() === target.toLowerCase());
+      target = lp?.[0] ?? actorKey(context, target as Address);
+    }
     const amount = args.amount ?? args.coverage ?? args.cap ?? args.totalPrincipal ?? 0n;
     return {
       blockNumber: Number(log.blockNumber),
       name: log.eventName,
-      target: String(target),
+      target,
       amount: toUsdc(asBigInt(amount, `${log.eventName}.amount`)),
       txHash: log.transactionHash,
       timepointSeq: timepointSeq(context, log.blockNumber),
@@ -448,9 +456,61 @@ export async function saveSnapshot(_context: RunContext, _snapshot: Snapshot): P
   throw new FullScenarioNotImplementedError();
 }
 
-/** There is no complete generated bundle until t7 and the same-run label map are available. */
+/** The generic runner stays blocked until a full production execution is wired. */
 export async function finalizeBundle(_context: RunContext): Promise<void> {
   throw new FullScenarioNotImplementedError();
+}
+
+/** Publish a local manifest only after every confirmed snapshot and C's DB label dump exist. */
+export async function finalizeLocalBundle(context: T0RunContext): Promise<void> {
+  const directory = snapshotDirectory(context.runId);
+  let previousBlock = context.deploymentBlock;
+  const snapshots: Snapshot[] = [];
+  for (const [seq, id] of TIMEPOINT_ORDER.entries()) {
+    const snapshot = JSON.parse(await readFile(resolve(directory, `${id}.json`), 'utf8')) as Snapshot;
+    assertSaveIdentity(context, snapshot);
+    if (snapshot.timepointId !== id || snapshot.seq !== seq
+        || !Number.isSafeInteger(snapshot.blockNumber)
+        || BigInt(snapshot.blockNumber) < previousBlock) {
+      throw new Error(`Cannot finalize: ${id} is missing, out of order or unconfirmed.`);
+    }
+    previousBlock = BigInt(snapshot.blockNumber);
+    snapshots.push(snapshot);
+  }
+
+  const labelPath = resolve(SNAPSHOT_ROOT, '..', 'labels', `${context.runId}.json`);
+  const labels = JSON.parse(await readFile(labelPath, 'utf8')) as LabelMap;
+  if (labels.runId !== context.runId || !labels.refunds || !labels.acquirers || !labels.issuers) {
+    throw new Error('Cannot finalize: same-run DB label map is missing or invalid.');
+  }
+  for (const snapshot of snapshots) {
+    for (const position of snapshot.positions) {
+      if (!labels.refunds[position.refundKey] || !labels.acquirers[position.acquirerHash]) {
+        throw new Error(`Cannot finalize: ${snapshot.timepointId} has a position absent from DB labels.`);
+      }
+    }
+    for (const issuer of snapshot.issuers) {
+      if (!labels.issuers[issuer.key] || !labels.acquirers[issuer.acquirerHash]) {
+        throw new Error(`Cannot finalize: ${snapshot.timepointId} has an issuer absent from DB labels.`);
+      }
+    }
+  }
+
+  const manifest: BundleManifest = {
+    schemaVersion: 1,
+    runId: context.runId,
+    generatedAt: new Date().toISOString(),
+    source: 'One continuous local Anvil rehearsal with seeded Postgres ledger',
+    timepoints: snapshots.map(snapshot => ({
+      timepointId: snapshot.timepointId,
+      seq: snapshot.seq,
+      label: snapshot.label,
+      file: `${snapshot.timepointId}.json`,
+    })),
+  };
+  await writeFile(resolve(directory, 'manifest.json'), `${JSON.stringify(manifest, null, 2)}\n`, {
+    encoding: 'utf8', flag: 'wx',
+  });
 }
 
 export async function snapshotRunExists(runId: string): Promise<boolean> {

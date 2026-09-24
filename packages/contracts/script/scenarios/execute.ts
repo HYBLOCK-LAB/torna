@@ -12,9 +12,11 @@ import {
 } from 'viem';
 
 import {
+  acquirerHashOf,
   advanceRefund,
   processRefund,
   repayRefund,
+  refundKeyOf,
   runLedgerRetryJob,
   type AdvanceOutcome,
   type Deployment,
@@ -349,12 +351,17 @@ async function advanceLocalTime(session: LocalT0Session): Promise<void> {
 }
 
 async function increaseLocalTime(session: LocalT0Session, seconds: number): Promise<void> {
+  const current = await session.publicClient.getBlock();
+  const target = current.timestamp + BigInt(seconds);
+  if (!Number.isSafeInteger(Number(target))) throw new Error('Local timestamp exceeds safe range.');
   const request = session.publicClient.request as unknown as (args: {
     method: string;
     params?: readonly unknown[];
   }) => Promise<unknown>;
-  await request({ method: 'evm_increaseTime', params: [seconds] });
+  await request({ method: 'evm_setNextBlockTimestamp', params: [Number(target)] });
   await request({ method: 'evm_mine', params: [] });
+  const mined = await session.publicClient.getBlock();
+  if (mined.timestamp < target) throw new Error('Local EVM did not reach the requested timestamp.');
 }
 
 async function depositCollateral(
@@ -671,8 +678,22 @@ async function finalizeLoss(
       [refundKey], `Finalize loss ${refundKey}`);
 }
 
+function seededScenarioRow(
+    ledger: T7LedgerIO|undefined, refundId: string, timepoint: TimepointId,
+    issuerId: string, acquirerId: string,
+): NonNullable<T7LedgerIO['scenarioRows']>[number]|undefined {
+  if (!ledger?.scenarioRows) return undefined;
+  const row = ledger.scenarioRows.find(item => item.refund_id === refundId);
+  if (!row || row.timepoint !== timepoint || row.issuer_id !== issuerId
+      || row.acquirer_id !== acquirerId || row.amount !== '1000.00'
+      || row.refund_key !== refundKeyOf(refundId)) {
+    throw new Error(`${timepoint} requires the seeded ${refundId} refund and adapter-derived key.`);
+  }
+  return row;
+}
+
 async function executeT1(
-    session: LocalT0Session, context: T0RunContext): Promise<CapturePoint> {
+    session: LocalT0Session, context: T0RunContext, ledger?: T7LedgerIO): Promise<CapturePoint> {
   if (!context.t0) throw new FullScenarioNotImplementedError();
   const {mockUsdc} = loadProtocolArtifacts();
   // Preserve the exact t0 wallet balances, then fund only the remaining t1-through-t5 fees.
@@ -681,16 +702,35 @@ async function executeT1(
       [context.actors.hybridIssuer, 110n * USDC], 'Mint remaining HYBRID scenario fees');
   await submitContract(
       session, 'deployer', context.asset, mockUsdc.abi, 'mint',
-      [context.actors.auraIssuer, 12n * USDC], 'Mint AURA scenario fees');
+      [context.actors.auraIssuer, ledger?.scenarioRows ? 600n * USDC : 12n * USDC],
+      'Mint AURA scenario fees');
+  const seeded = ledger?.scenarioRows?.filter(row => row.timepoint === 't1');
+  const yearlyRows = seeded && [
+    ...seeded.filter(row => row.refund_id !== 'REF-2026-021'),
+    ...seeded.filter(row => row.refund_id === 'REF-2026-021'),
+  ];
+  if (yearlyRows && (yearlyRows.length !== 365
+      || yearlyRows.at(-1)?.refund_id !== 'REF-2026-021')) {
+    throw new Error('t1 requires 365 seeded refunds with REF-2026-021 last.');
+  }
   let finalTransaction: ConfirmedTransaction|undefined;
   let yearlyLoss: Hex|undefined;
   for (let index = 0; index < 365; index += 1) {
-    const refundKey = keccak256(stringToHex(`REF-LOCAL-YEAR-${String(index + 1).padStart(3, '0')}`));
+    const row = yearlyRows?.[index];
+    const refundKey = row ? refundKeyOf(row.refund_id)
+      : keccak256(stringToHex(`REF-LOCAL-YEAR-${String(index + 1).padStart(3, '0')}`));
+    if (row && (row.refund_key !== refundKey || row.amount !== '1000.00'
+        || (row.issuer_id !== 'HYBRID' && row.issuer_id !== 'AURA')
+        || row.acquirer_id !== (row.issuer_id === 'HYBRID' ? 'ACQ-α' : 'ACQ-β'))) {
+      throw new Error(`t1 seeded refund ${row.refund_id} has invalid chain inputs.`);
+    }
+    const issuerActor = row?.issuer_id === 'AURA' ? 'auraIssuer' : 'hybridIssuer';
+    const acquirerHash = row ? acquirerHashOf(row.acquirer_id) : context.t0.acquirerHash;
     const issued = await issueAdvance(
-        session, context, 'hybridIssuer', refundKey, context.t0.acquirerHash);
+        session, context, issuerActor, refundKey, acquirerHash);
     finalTransaction = issued.transaction;
     if (index < 364) {
-      finalTransaction = await repayAdvance(session, context, 'hybridIssuer', refundKey);
+      finalTransaction = await repayAdvance(session, context, issuerActor, refundKey);
     } else {
       yearlyLoss = refundKey;
     }
@@ -712,11 +752,14 @@ async function executeT2(
 }
 
 async function executeT3(
-    session: LocalT0Session, context: T0RunContext): Promise<CapturePoint> {
+    session: LocalT0Session, context: T0RunContext, ledger?: T7LedgerIO): Promise<CapturePoint> {
   const auraAcquirer = keccak256(stringToHex('ACQ-β'));
   const keys: Hex[] = [];
   for (let index = 0; index < 4; index += 1) {
-    const key = keccak256(stringToHex(`REF-LOCAL-AURA-${index + 1}`));
+    const seededId = `REF-2026-${String(index + 31).padStart(3, '0')}`;
+    const row = seededScenarioRow(ledger, seededId, 't3', 'AURA', 'ACQ-β');
+    const key = row ? refundKeyOf(row.refund_id)
+      : keccak256(stringToHex(`REF-LOCAL-AURA-${index + 1}`));
     await issueAdvance(session, context, 'auraIssuer', key, auraAcquirer);
     keys.push(key);
   }
@@ -749,11 +792,14 @@ async function executeT3b(
 }
 
 async function executeT4(
-    session: LocalT0Session, context: T0RunContext): Promise<CapturePoint> {
+    session: LocalT0Session, context: T0RunContext, ledger?: T7LedgerIO): Promise<CapturePoint> {
   if (!context.t0) throw new Error('t4 requires t0 issuer metadata.');
   const keys: Hex[] = [];
   for (let index = 0; index < 4; index += 1) {
-    const key = keccak256(stringToHex(`REF-LOCAL-WITHDRAW-${index + 1}`));
+    const seededId = `REF-2026-${170 + index}`;
+    const row = seededScenarioRow(ledger, seededId, 't4', 'HYBRID', 'ACQ-α');
+    const key = row ? refundKeyOf(row.refund_id)
+      : keccak256(stringToHex(`REF-LOCAL-WITHDRAW-${index + 1}`));
     await issueAdvance(session, context, 'hybridIssuer', key, context.t0.acquirerHash);
     keys.push(key);
   }
@@ -782,9 +828,11 @@ async function executeT4b(
 }
 
 async function executeT5(
-    session: LocalT0Session, context: T0RunContext): Promise<CapturePoint> {
+    session: LocalT0Session, context: T0RunContext, ledger?: T7LedgerIO): Promise<CapturePoint> {
   if (!context.t0) throw new Error('t5 requires t0 issuer metadata.');
-  const refundKey = keccak256(stringToHex('REF-LOCAL-DELAYED'));
+  const row = seededScenarioRow(ledger, 'REF-2026-014', 't5', 'HYBRID', 'ACQ-α');
+  const refundKey = row ? refundKeyOf(row.refund_id)
+    : keccak256(stringToHex('REF-LOCAL-DELAYED'));
   await issueAdvance(session, context, 'hybridIssuer', refundKey, context.t0.acquirerHash);
   await increaseLocalTime(session, FIVE_DAYS + 1);
   await review(session, context, refundKey, 'Delayed upstream settlement');
@@ -1066,13 +1114,13 @@ export async function executeScenario(
     ledger?: T7LedgerIO): Promise<CapturePoint> {
   switch (id) {
     case 't0': return executeT0(session, context, ledger);
-    case 't1': return executeT1(session, context);
+    case 't1': return executeT1(session, context, ledger);
     case 't2': return executeT2(session, context);
-    case 't3': return executeT3(session, context);
+    case 't3': return executeT3(session, context, ledger);
     case 't3b': return executeT3b(session, context);
-    case 't4': return executeT4(session, context);
+    case 't4': return executeT4(session, context, ledger);
     case 't4b': return executeT4b(session, context);
-    case 't5': return executeT5(session, context);
+    case 't5': return executeT5(session, context, ledger);
     case 't6': return executeT6(session, context);
     case 't7': return executeT7(session, context, ledger);
     case 't8': return executeT8(session, context);

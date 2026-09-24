@@ -1,6 +1,6 @@
 # Torna contracts
 
-Owner: Minseo (B). Local PoC, updated 2026-09-22.
+Owner: Minseo (B). Local PoC, updated 2026-09-24.
 
 ## Implemented
 
@@ -34,7 +34,8 @@ Completion removes the LP's
 principal, proportional fee share and current LP-loss share. Post-bootstrap LP deposits are
 implemented with PRD cap-based partial acceptance. Loss execution is implemented locally but
 the current demo keeps one pending LP withdrawal at a time; a multi-request queue remains future work.
-the 13-timepoint chain runner and production snapshot generation are not complete.
+The local 13-timepoint Anvil runner now produces a verified bundle from a disposable
+Postgres ledger. Monad Testnet execution and production snapshot generation are not complete.
 Do not send real funds: use synthetic local test tokens only.
 
 ## Initial liquidity (D01 approved by Minseo, 2026-09-20)

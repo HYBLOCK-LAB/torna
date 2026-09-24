@@ -1,5 +1,8 @@
 import {refundKeyOf, type CreditLedger, type LedgerRetryStore, type RefundRow} from '@torna/adapter';
-import {balanceOf, creditLedger, getRefund, ledgerRetryStore, type Sql} from '@torna/ledger';
+import {
+  balanceOf, creditLedger, getRefund, ledgerRetryStore, listRefunds,
+  type LedgerRefund, type Sql,
+} from '@torna/ledger';
 
 /** DB access stays in the private runner closure, never in a public snapshot context. */
 export interface T7LedgerIO {
@@ -7,6 +10,8 @@ export interface T7LedgerIO {
   store: LedgerRetryStore;
   creditLedger: CreditLedger;
   cardholderBalance(): Promise<string>;
+  /** Seeded DB rows stay private to the runner; snapshots contain only chain hashes. */
+  scenarioRows?: readonly LedgerRefund[];
 }
 
 /** Read the real seeded refund; never substitute a fixture for a DB-backed run. */
@@ -17,9 +22,15 @@ export async function loadT7LedgerIO(sql: Sql): Promise<T7LedgerIO> {
       || row.amount !== '1000.00') {
     throw new Error('t7 requires the seeded REF-2026-001 refund with its adapter-derived key.');
   }
+  const scenarioRows = await listRefunds(sql);
+  if (scenarioRows.length !== 378 || scenarioRows.some(item =>
+    !item.refund_key || item.status !== 'confirmed' || item.amount !== '1000.00')) {
+    throw new Error('The scenario requires all 378 confirmed, keyed seed refunds.');
+  }
   const cardholderId = row.cardholder_id;
   return {
     row,
+    scenarioRows,
     store: ledgerRetryStore(sql),
     creditLedger: (key, amount, txHash) => creditLedger(sql, key, amount, txHash),
     cardholderBalance: () => balanceOf(sql, cardholderId),

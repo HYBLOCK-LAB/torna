@@ -7,10 +7,13 @@ import {
   LOCAL_T0_TO_T5,
   LOCAL_T0_TO_T6,
   LOCAL_T0_TO_T7,
+  LOCAL_T0_TO_T9B,
   runLocalT0,
   runLocalT0ToT5,
   runLocalT0ToT6,
   runLocalT0ToT7,
+  runLocalT0ToT9b,
+  validateLocalLedgerUrl,
 } from '../script/run-scenarios';
 import {
   LocalT0ConfigurationError,
@@ -126,6 +129,14 @@ test('local t0 rejects Monad Testnet chain IDs and non-loopback RPC URLs', () =>
   assert.throws(() => validateLoopbackRpc('http://user:pass@localhost:8545'), LocalT0ConfigurationError);
 });
 
+test('full local bundle rejects a public or missing ledger URL before connecting', () => {
+  assert.equal(validateLocalLedgerUrl('postgres://user@127.0.0.1:15432/torna_test'),
+      'postgres://user@127.0.0.1:15432/torna_test');
+  assert.throws(() => validateLocalLedgerUrl(undefined), /loopback DATABASE_URL/);
+  assert.throws(() => validateLocalLedgerUrl('postgres://user@db.supabase.co/postgres'),
+      /loopback PostgreSQL DATABASE_URL/);
+});
+
 test('public deployment context has no signing configuration', () => {
   assert.doesNotThrow(() => assertPublicT0RunContext(context));
   const serialized = JSON.stringify(context, (_key, value) =>
@@ -185,6 +196,17 @@ test('local t0 through t7 captures the recovered ledger event before continuing'
   assert.deepEqual(calls, [
     'preflight', 'deploy',
     ...LOCAL_T0_TO_T7.flatMap(id => [
+      `execute:${id}`, `capture:${id}`, `save:${id}`,
+    ]),
+  ]);
+});
+
+test('full local segment captures all thirteen points in order', async () => {
+  const calls: string[] = [];
+  await runLocalT0ToT9b(mockSegmentRuntime(calls));
+  assert.deepEqual(calls, [
+    'preflight', 'deploy',
+    ...LOCAL_T0_TO_T9B.flatMap(id => [
       `execute:${id}`, `capture:${id}`, `save:${id}`,
     ]),
   ]);
