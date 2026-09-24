@@ -8,7 +8,8 @@
   },
   "scripts": {
     "test": "node --import tsx --test test/*.test.ts",
-    "typecheck": "tsc --project tsconfig.json"
+    "typecheck": "tsc --project tsconfig.json",
+    "smoke": "node --import tsx scripts/local-smoke.ts"
   },
   "dependencies": {
     "viem": "2.37.13"
