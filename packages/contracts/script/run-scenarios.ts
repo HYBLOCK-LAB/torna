@@ -7,6 +7,7 @@ import { TIMEPOINT_ORDER } from '../../../shared/types/snapshot';
 import {
   createLocalT0Session,
   deployProtocol,
+  measureTestnetGas,
   preflightMonadTestnet,
   preflightLocalT0,
 } from './deploy';
@@ -95,10 +96,11 @@ export async function runScenarios(runtime: ScenarioRuntime = scaffoldRuntime): 
 }
 
 /** Create the narrow real-chain boundary without exposing signing configuration. */
-export function createLocalT0Runtime(config: LocalT0Config): LocalT0Runtime {
+export function createLocalT0Runtime(config: LocalT0Config | MonadTestnetConfig): LocalT0Runtime {
   const session = createLocalT0Session(config);
   return {
-    preflight: () => preflightLocalT0(session),
+    preflight: () => session.target === 'testnet'
+      ? preflightMonadTestnet(session) : preflightLocalT0(session),
     deploy: () => deployProtocol(session),
     execute: context => executeT0(session, context),
     capture: (context, point) => captureT0Snapshot(session, context, point),
@@ -177,7 +179,7 @@ export function formatLocalT0ExecutionReport(
  */
 export async function runLocalT0(
     runtime: LocalT0Runtime,
-    onExecutionConfirmed?: (context: T0RunContext, point: CapturePoint) => void,
+    onExecutionConfirmed?: (context: T0RunContext, point: CapturePoint) => void | Promise<void>,
 ): Promise<void> {
   await runtime.preflight();
   const context = await runtime.deploy();
@@ -186,7 +188,7 @@ export async function runLocalT0(
   if (point.timepointId !== 't0' || point.blockNumber < context.deploymentBlock) {
     throw new Error('Invalid local t0 capture point.');
   }
-  onExecutionConfirmed?.(context, point);
+  await onExecutionConfirmed?.(context, point);
   const snapshot = await runtime.capture(context, point);
   if (snapshot.runId !== context.runId || snapshot.timepointId !== 't0' || snapshot.seq !== 0
       || snapshot.chainId !== context.chainId
@@ -281,6 +283,27 @@ export async function runTestnetBundle(
   return runLocalBundle(config, databaseUrl, onTimepointConfirmed);
 }
 
+/** Small receipt-confirmed t0 rehearsal; reports gas by signer before saving one t0 snapshot. */
+export async function runTestnetSmoke(config: MonadTestnetConfig): Promise<void> {
+  if (config.target !== 'testnet' || config.chainId !== 10143) {
+    throw new Error('Testnet smoke requires explicit Monad Testnet configuration.');
+  }
+  if (await snapshotRunExists(config.runId)) {
+    throw new Error(`Refusing to reuse existing Testnet run ID: ${config.runId}.`);
+  }
+  const labelPath = resolve(LABEL_ROOT, `${config.runId}.json`);
+  try {
+    await access(labelPath);
+    throw new Error(`Refusing to reuse existing Testnet run ID: ${config.runId}.`);
+  } catch (error: unknown) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
+  const session = createLocalT0Session(config);
+  await runLocalT0(createLocalT0Runtime(config), async (context, point) => {
+    console.log(await measureTestnetGas(session, context, point.blockNumber));
+  });
+}
+
 async function runLocalSegment(
     runtime: LocalScenarioRuntime,
     timepoints: readonly typeof TIMEPOINT_ORDER[number][],
@@ -354,7 +377,11 @@ async function main(): Promise<void> {
             `Confirmed ${point.timepointId} at block ${point.blockNumber.toString()}.`));
     return;
   }
-  throw new Error('Usage: run-scenarios.ts [--plan | --t0 | --through-t5 | --through-t6 | --through-t9b | --testnet-bundle | --execute]');
+  if (args.length === 1 && args[0] === '--testnet-smoke') {
+    await runTestnetSmoke(loadMonadTestnetConfig());
+    return;
+  }
+  throw new Error('Usage: run-scenarios.ts [--plan | --t0 | --through-t5 | --through-t6 | --through-t9b | --testnet-smoke | --testnet-bundle | --execute]');
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

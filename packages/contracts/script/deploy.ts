@@ -4,6 +4,7 @@ import {
   createPublicClient,
   createWalletClient,
   encodeFunctionData,
+  formatEther,
   http,
   type Abi,
   type Address,
@@ -181,6 +182,53 @@ export async function preflightMonadTestnet(session: LocalT0Session): Promise<vo
     throw new LocalT0ConfigurationError(
         'Testnet signers have less combined MON than the explicitly configured gas budget.');
   }
+}
+
+/** Measure confirmed gas from this run only, grouped by each derived signer. */
+export async function measureTestnetGas(
+    session: LocalT0Session, context: T0RunContext, throughBlock: bigint): Promise<string> {
+  if (session.target !== 'testnet' || context.chainId !== MONAD_TESTNET_CHAIN_ID) {
+    throw new LocalT0ConfigurationError('Gas measurement requires a confirmed Testnet run.');
+  }
+  const actors = [
+    'deployer', 'verifier', 'submitter',
+    'lp01', 'lp02', 'lp03', 'lp04', 'lp05', 'lp06',
+  ] as const;
+  const senders = new Map(actors.map(actor => [
+    session.config.accounts[actor].address.toLowerCase(), actor,
+  ]));
+  const gasByActor = new Map<(typeof actors)[number], {count: number; wei: bigint}>(
+      actors.map(actor => [actor, {count: 0, wei: 0n}]));
+  let transactionCount = 0;
+  const firstBlock = context.deploymentBlock > 0n ? context.deploymentBlock - 1n : 0n;
+  for (let number = firstBlock; number <= throughBlock; number++) {
+    const block = await session.publicClient.getBlock({blockNumber: number, includeTransactions: true});
+    for (const transaction of block.transactions) {
+      if (typeof transaction === 'string') continue;
+      const actor = senders.get(transaction.from.toLowerCase());
+      if (!actor) continue;
+      const receipt = await session.publicClient.getTransactionReceipt({hash: transaction.hash});
+      if (receipt.effectiveGasPrice === undefined) {
+        throw new Error('Confirmed Testnet receipt did not report its effective gas price.');
+      }
+      const item = gasByActor.get(actor)!;
+      item.count += 1;
+      item.wei += receipt.gasUsed * receipt.effectiveGasPrice;
+      transactionCount += 1;
+    }
+  }
+  const totalWei = [...gasByActor.values()].reduce((sum, item) => sum + item.wei, 0n);
+  return JSON.stringify({
+    runId: context.runId,
+    chainId: context.chainId,
+    transactionCount,
+    gasSpentMon: formatEther(totalWei),
+    bySigner: Object.fromEntries([...gasByActor].map(([actor, item]) => [
+      actor,
+      {address: session.config.accounts[actor].address, transactionCount: item.count,
+        gasSpentMon: formatEther(item.wei)},
+    ])),
+  }, null, 2);
 }
 
 /** Deploy only the two PRD contracts after preflight has explicitly succeeded. */

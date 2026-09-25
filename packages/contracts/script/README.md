@@ -116,8 +116,16 @@ print the mnemonic or a credentialed RPC URL:
 | `TORNA_TESTNET_GAS_BUDGET_MON` | Explicit budget, at least 15 MON, and the derived signers together must hold at least this amount. |
 | `DATABASE_URL` | Disposable, seeded, loopback-only PostgreSQL URL; public or Supabase URLs are rejected. |
 
-After a local 13-point rehearsal has passed and all nine gas-paying accounts
-have been funded and checked, run:
+After a local 13-point rehearsal has passed, first run the small t0 gas rehearsal.
+It writes only the t0 snapshot and prints measured cost by signer; it is not a full
+bundle:
+
+```bash
+corepack pnpm --filter @torna/contracts scenario:testnet-smoke
+```
+
+Use a fresh `run-testnet-...` ID for each attempt. Review the actual gas-cost
+distribution and fund the nine gas-paying accounts before the full run:
 
 ```bash
 corepack pnpm --filter @torna/contracts scenario:testnet-bundle
@@ -127,7 +135,7 @@ corepack pnpm verify:bundle shared/snapshots/$RUN_ID
 Preflight checks the actual chain ID, compiled artifacts and combined signer
 balance before the first deployment. That balance threshold is a floor, not a
 promise that the chosen budget will cover every transaction; Monad charges by
-gas limit. Use the 10-transaction rehearsal to measure per-signer gas before
+gas limit. Use the t0 smoke result to measure per-signer gas before
 attempting the full ~800-transaction run. The command refuses an existing run
 directory or label file.
 
@@ -169,7 +177,7 @@ The required t0 sequence is receipt-confirmed in this order:
 
 1. Deploy MockUSDC and Torna, then verify the three contract roles.
 2. Mint local test tokens, configure LP-01/02/03, approve and deposit 5,000/3,000/2,000 USDC.
-3. Register HYBRID and AURA, advance only the local EVM clock by 30 days and confirm ramp-up ended.
+3. Register HYBRID and AURA at the actual block time, record their bootstrap-only ramp exemptions, and confirm the ramp flag is clear.
 4. Submit issuer-signed Permit-backed collateral deposits (3,000 and 600 USDC).
 5. Seed the one-time 500 USDC reserve.
 6. Ask the adapter to submit a signed 1,000 USDC advance and require a matching `AdvanceIssued` event.
