@@ -250,7 +250,9 @@ The verifier owns the loss path through three role-gated calls:
 - `finalizeCoveredLoss(refundKey)` applies the PRD waterfall once. Issuer margin is
   charged first, then reserve, then LP loss. The position becomes `CoveredLoss` only
   when the same acquirer's cumulative coverage fits within `20%` of total LP principal;
-  otherwise it becomes `CapHeld`.
+  otherwise it becomes `CapHeld`. From the second finalized position for one acquirer
+  onward, `CorrelatedExposureFlagged` records the cumulative principal after each
+  finalization; the latest t3 event reports 4,000 USDC.
 - `recordRecovery(refundKey, recovered)` pulls the recovery amount from the verifier's
   allowance and settles every position grouped by the anchor's `acquirerHash`. Previously
   recognized loss is reconciled so issuer collateral is not charged twice, and all grouped
@@ -264,8 +266,8 @@ event aggregation is cleared so a future event can use the same acquirer. `Loss.
 PRD t3/t3b numbers, Review repayment, maturity and role checks, missing allowance,
 over-recovery rollback and duplicate recovery.
 
-The local contract gate passes, but the full 13-timepoint chain run, testnet deployment,
-and generated production snapshot bundle are not claimed here.
+The local 13-timepoint Anvil run and contract gate pass. Testnet deployment and a
+generated production snapshot bundle are not claimed here.
 
 ## Setup
 

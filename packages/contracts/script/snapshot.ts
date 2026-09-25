@@ -267,7 +267,8 @@ function eventEntries(context: T0RunContext, logs: ParsedLog[]): EventLogEntry[]
         address.toLowerCase() === target.toLowerCase());
       target = lp?.[0] ?? actorKey(context, target as Address);
     }
-    const amount = args.amount ?? args.coverage ?? args.cap ?? args.totalPrincipal ?? 0n;
+    const amount = args.amount ?? args.coverage ?? args.principal ?? args.recovered
+      ?? args.cap ?? args.totalPrincipal ?? 0n;
     return {
       blockNumber: Number(log.blockNumber),
       name: log.eventName,

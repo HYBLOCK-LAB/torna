@@ -15,7 +15,7 @@ Owner: Minseo (B). Version-one wire-format proposal, ready for consumer review.
 | Torna.json | Full ABI exported from the compiled implementation, including custom errors |
 | states.ts | Solidity enum indexes and snapshot-compatible state names |
 | reasons.ts | Advance rejection codes 1..8 and deposit rejection codes 1..2 |
-| events.ts | The 20 PRD protocol event ABI entries, including indexed fields |
+| events.ts | PRD protocol events plus the correlated-exposure event, including indexed fields |
 | fixtures/advance-request.json | Public fixed hashes consumed by Solidity and TypeScript tests |
 | fixtures/permit.json | Public Permit hashes checked by Solidity and TypeScript, without keys/signatures |
 | fixtures/collateral-deposit.json | Public collateral-action hashes checked by both languages |
@@ -29,6 +29,10 @@ AdvanceIssued or AdvanceRejected, full repayment emits AdvanceRepaid, and post-b
 LP deposits emit LiquidityDeposited plus DepositRejected for an unaccepted remainder.
 Loss execution now emits MarkedOverdue/ReviewOpened, CoveredLossFinalized or
 LossCapTriggered, and RecoveryRecorded through the verifier-only review/cap/recovery API.
+From the second finalized position in one acquirer event onward,
+CorrelatedExposureFlagged(acquirerHash, principal) records the cumulative principal after
+each finalization. The most recent event is the current total; the local t3 event reaches
+4,000 USDC. It does not alter loss accounting or add a separate verifier action.
 Partial repayment is still pending. LP withdrawal uses `requestWithdraw(principal)` to record
 the immediate quote `min(NAV × share, cash × share)` without changing the request-only
 t4 snapshot. Permissionless `processWithdrawal()` transfers that quote; any remainder is paid
@@ -36,7 +40,7 @@ automatically by a later repayment. Completion removes the LP's proportional pri
 share and current LP-loss share.
 D01 also adds InitialLiquidityConfigured(address[3]) and
 InitialLiquidityCompleted(uint256) setup events in the compiled artifact; they are
-not part of the 20 PRD entries in events.ts. See the contracts README for the setup API.
+not part of the PRD entries in events.ts. See the contracts README for the setup API.
 Issuer registration metadata and the diagnostic ramp/limit queries are documented
 there too. Balance-derived status and signed advance execution are implemented;
 administrative suspension/removal remain pending. Loss-driven position transitions are

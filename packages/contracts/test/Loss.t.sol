@@ -16,6 +16,7 @@ contract LossTest is ProtocolFixture {
 
     event AdvanceRepaid(bytes32 indexed refundKey, uint256 amount);
     event CoveredLossFinalized(bytes32 indexed refundKey, uint256 coverage);
+    event CorrelatedExposureFlagged(bytes32 indexed acquirerHash, uint256 principal);
     event LossCapTriggered(bytes32 indexed acquirerHash, uint256 cap);
     event RecoveryRecorded(bytes32 indexed refundKey, uint256 recovered);
 
@@ -60,9 +61,9 @@ contract LossTest is ProtocolFixture {
         vm.warp(block.timestamp + 2);
         _reviewAndFinalize(prior);
         _reviewAndFinalize(first);
-        _reviewAndFinalize(second);
-        _reviewAndFinalize(third);
-        _reviewAndFinalize(fourth);
+        _reviewAndExpectCorrelatedPrincipal(second, 2000e6);
+        _reviewAndExpectCorrelatedPrincipal(third, 3000e6);
+        _reviewAndExpectCorrelatedPrincipal(fourth, 4000e6);
 
         assertEq(torna.eventRecognizedCoverage(ACQUIRER_B), 1600e6);
         assertEq(torna.collateralOf(issuers[1]), 200e6);
@@ -241,6 +242,17 @@ contract LossTest is ProtocolFixture {
     function _reviewAndFinalize(AdvanceRequest memory request) private {
         vm.prank(verifier);
         torna.openReview(request.refundKey, "settlement not received");
+        vm.prank(verifier);
+        torna.finalizeCoveredLoss(request.refundKey);
+    }
+
+    function _reviewAndExpectCorrelatedPrincipal(AdvanceRequest memory request, uint256 principal)
+        private
+    {
+        vm.prank(verifier);
+        torna.openReview(request.refundKey, "settlement not received");
+        vm.expectEmit(true, false, false, true, address(torna));
+        emit CorrelatedExposureFlagged(ACQUIRER_B, principal);
         vm.prank(verifier);
         torna.finalizeCoveredLoss(request.refundKey);
     }

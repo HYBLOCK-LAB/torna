@@ -550,6 +550,9 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
 
         bytes32 acquirerHash = position.acquirerHash;
         _rememberEventPosition(acquirerHash, refundKey, position.issuer);
+        if (_eventPositions[acquirerHash].length > 1) {
+            emit CorrelatedExposureFlagged(acquirerHash, _eventAccounting[acquirerHash].principal);
+        }
         uint256 cap = Waterfall.eventCap(totalLpPrincipal);
         uint256 recognized = eventRecognizedCoverage[acquirerHash];
         if (!Waterfall.applyCap(recognized, position.poolCoverage, cap)) {

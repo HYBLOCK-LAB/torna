@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.24;
 
-/// @notice PRD wire events for registration, funding, advances, repayment and loss review.
+/// @notice Wire events for registration, funding, advances, repayment and loss review.
 abstract contract TornaEvents {
     event IssuerRegistered(address indexed issuer, bytes32 acquirerHash, string name);
     event CollateralDeposited(address indexed issuer, uint256 amount);
@@ -16,6 +16,7 @@ abstract contract TornaEvents {
     event MarkedOverdue(bytes32 indexed refundKey);
     event ReviewOpened(bytes32 indexed refundKey, string evidence);
     event CoveredLossFinalized(bytes32 indexed refundKey, uint256 coverage);
+    event CorrelatedExposureFlagged(bytes32 indexed acquirerHash, uint256 principal);
     event LossCapTriggered(bytes32 indexed acquirerHash, uint256 cap);
     event RecoveryRecorded(bytes32 indexed refundKey, uint256 recovered);
     event LiquidityDeposited(address indexed lp, uint256 amount);
