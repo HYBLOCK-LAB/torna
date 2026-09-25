@@ -300,7 +300,7 @@ export const COPY = {
 | 건당 수수료 | 0.3% | 자금 사용료 + 위험 인수료 + 프로토콜 마진 |
 | 수수료 배분 | LP 80% / 준비금 13.3% / 프로토콜 6.7% | |
 | 단일 사건 손실 상한 | LP 예치금의 20% | 한 사건이 풀 전체를 무너뜨리지 못하게 |
-| 유휴자금 운용 상한 | 50% | 운용분이 전부 묶여도 정상 운영 가능해야 |
+| 유휴자금 운용 상한 | **평가액 × 50%** | 운용분이 전부 묶여도 정상 운영 가능해야 |
 | 발급사 집중 한도 | 40% | 단, 발급사가 적을 땐 `1 ÷ 발급사 수`가 우선 |
 | 풀 매입사 노출 한도 | 풀 가능액 × 50% | **신규 선지급에만 적용.** 기존 물량 소급 없음 |
 | LP 예치 한도 | 평균 미상환 ÷ 30% | 목표 가동률이 정하는 총 예치 상한 |
@@ -796,7 +796,14 @@ pnpm dev                      # http://localhost:5173 이 뜨면 성공
 샘플 번들과 실제 번들은 **크기가 다릅니다.** 샘플은 시점 1의 1년치를 `YearlySummaryLoaded` 한 줄로 요약하고 있지만, 실제 실행에서는 그 자리에 **약 730건의 트랜잭션이 들어옵니다**(15번 참조). 교체 작업에는 다음 세 가지가 포함됩니다.
 
 - **온체인 이벤트 표에 표시 상한을 넣습니다.** 지금은 전부 그립니다. 시점 1에서만 700줄이 되면 렌더가 느려지고, 심사위원은 스크롤만 하게 됩니다. 최근 N건 + 「더 보기」 형태로 자릅니다.
-- **시나리오 1의 설계 포인트 문장을 고칩니다.** 「이 요약만 가정값이고 나머지 시나리오는 전부 실제 상태 변화입니다」는 실제 번들에서는 사실이 아닙니다 — 그때는 전부 실제 상태 변화입니다.
+- **시나리오 1의 설계 포인트 문장을 고칩니다.** `shared/narrative.ts`의 `t1.designPoint` 한 줄입니다. 현재 문구 「이 요약만 가정값이고 나머지 시나리오는 전부 실제 상태 변화입니다」는 실제 번들에서 사실이 아닙니다. 동시에 **시나리오 시간과 온체인 경과 시간의 차이**도 이 자리에서 밝힙니다 — 1년치 운영과 영업일 5일 만기는 재생된 설정값이고, 체인에서 실제로 흐른 시간은 본 실행 몇십 분입니다. 먼저 말하면 실행 시간을 압축한 데모가 되고, 들켜서 답하면 숨기려던 것이 됩니다. 아래 문구를 그대로 씁니다.
+
+```ts
+designPoint: {
+  ko: '1년치 운영과 만기 주기는 재생된 시나리오 시간이고, 상태 변화는 전부 체인에서 실제로 일어났습니다.',
+  en: 'The year of operation and the maturity cycle are replayed scenario time; every state change really happened on chain.',
+},
+```
 
 > 화면 구조 → Notion 9번 「데모 화면과 시나리오」
 
@@ -886,6 +893,7 @@ function test_Waterfall_담보가_마진을_못내면_풀이_떠안는다() publ
 | 발급사 유효 한도 | `Limits.effectiveLimit()` | `advance()` |
 | 매입사 노출 한도 | `Limits.acquirerRoom()` | `advance()` |
 | LP 예치 · 집중 한도 | `Limits.depositRoom()` | `depositLiquidity()` |
+| 유휴자금 운용 상한 | `Limits.idleRoom()` | `deployIdle()` |
 
 함수 이름은 예시입니다. **바꾸셔도 되지만 `shared/abi/`에 확정본을 올릴 때 같이 알려주세요.**
 
@@ -897,9 +905,41 @@ function test_Waterfall_담보가_마진을_못내면_풀이_떠안는다() publ
 DEFAULT_ADMIN_ROLE   배포자. 발급사 등록 · 파라미터
 VERIFIER_ROLE        검증자. openReview · finalizeCoveredLoss · recordRecovery
 SUBMITTER_ROLE       어댑터 제출자. advance · repay
+TREASURY_ROLE        유휴자금 운용. deployIdle · recallIdle
 ```
 
-지갑 index 0 · 1 · 2가 각각 여기에 붙습니다. **컨트랙트를 나누면 배포 주소가 늘고 호출이 복잡해질 뿐 얻는 게 없습니다.**
+지갑 index 0 · 1 · 2가 각각 앞의 셋에 붙습니다. **컨트랙트를 나누면 배포 주소가 늘고 호출이 복잡해질 뿐 얻는 게 없습니다.**
+
+`TREASURY_ROLE`은 로컬 실행에서 배포자 지갑이 겸해도 되지만 **역할은 분리해 둡니다.** LP 자금을 풀 밖으로 내보내는 동작이라, 발급사 등록이나 준비금 시드와 같은 권한에 묶이면 안 됩니다.
+
+#### 시점 6 — 유휴자금 운용과 동결
+
+**실제 토큰을 외부 주소로 옮깁니다. 내부 회계로 표시하지 않습니다.** 이 시나리오가 주장하는 것은 「이 돈은 지금 꺼낼 수 없다」입니다. 토큰이 Torna에 그대로 남아 있으면 그 주장이 증명되지 않습니다 — 누구나 Torna의 잔액을 조회할 수 있기 때문입니다.
+
+보관처 `idleVault`는 admin이 지정하는 **평범한 외부 주소(EOA)**입니다. 계약이 아니므로 **배포는 여전히 Torna와 MockUSDC 둘뿐입니다.** 실제 DeFi 프로토콜을 붙이거나 별도 금고 컨트랙트를 만들지 않습니다.
+
+```
+deployIdle(amount)    TREASURY_ROLE. 상한 검사 → transfer(idleVault, amount)
+                      externalDeployed += amount, IdleDeployed emit
+                      이미 동결 상태면 revert
+
+recallIdle(amount)    TREASURY_ROLE. transferFrom(idleVault, this, amount) 시도
+                      실패하면 IdleWithdrawFailed emit, externalFrozen = true
+                      externalDeployed는 그대로 — 돈은 아직 밖에 있다
+```
+
+**상한은 호출자가 지키는 것이 아니라 컨트랙트가 막습니다.** `deployIdle` 안에서 초과면 revert입니다.
+
+**인출 실패는 만들어내지 않습니다.** `idleVault`가 Torna에 approve를 하지 않으면 `transferFrom`이 그대로 실패합니다. 시점 6에서 approve를 하지 않는 것 자체가 시나리오이며, 실패를 흉내 낼 필요가 없습니다.
+
+동결을 증명하는 것은 네 가지입니다. 앞의 둘이 핵심입니다 — 이벤트는 기록이고, 잔액은 사실입니다.
+
+- Torna의 MockUSDC 잔액이 운용액만큼 줄어 있다
+- `idleVault` 주소가 그 금액을 들고 있다
+- `IdleDeployed` · `IdleWithdrawFailed` 이벤트 로그
+- `externalFrozen = true`
+
+**동결 이후:** 추가 `deployIdle`은 막히고, 운용액은 **평가액에는 그대로 남습니다.** 자산이 사라진 것이 아니라 유동성이 묶인 것입니다. 대신 선지급 여력에서는 빠집니다 — `poolCapacity = 평가액 − 운용액`. 시점 9에서 다섯 발급사의 유효 한도가 낮게 잡히는 이유가 이것입니다.
 
 #### 작업 순서 · 2주차 — 돌리기
 
