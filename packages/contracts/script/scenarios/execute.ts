@@ -349,6 +349,13 @@ export async function verifyLiquidityDeposit(
 async function increaseLocalTime(session: LocalT0Session, seconds: number): Promise<void> {
   const current = await session.publicClient.getBlock();
   const target = current.timestamp + BigInt(seconds);
+  if (session.target === 'testnet') {
+    while (true) {
+      const latest = await session.publicClient.getBlock();
+      if (latest.timestamp >= target) return;
+      await new Promise(resolve => setTimeout(resolve, 5_000));
+    }
+  }
   if (!Number.isSafeInteger(Number(target))) throw new Error('Local timestamp exceeds safe range.');
   const request = session.publicClient.request as unknown as (args: {
     method: string;

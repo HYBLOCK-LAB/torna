@@ -16,6 +16,10 @@ import {
 } from './runtime/errors';
 import type { LocalT0Config, LocalT0SigningAccounts } from './runtime/local-config';
 import { publicActors } from './runtime/local-config';
+import {
+  MONAD_TESTNET_CHAIN_ID,
+  type MonadTestnetConfig,
+} from './runtime/testnet-config';
 import { assertPublicT0RunContext, type ConfirmedTransaction, type T0RunContext } from './runtime/types';
 
 export type LocalT0Actor = keyof LocalT0SigningAccounts;
@@ -27,7 +31,8 @@ export interface ContractArtifact {
 
 export interface LocalT0Session {
   /** Private configuration: never serialize or expose this object. */
-  config: LocalT0Config;
+  config: LocalT0Config | MonadTestnetConfig;
+  target: 'local' | 'testnet';
   publicClient: ReturnType<typeof createPublicClient>;
 }
 
@@ -53,9 +58,10 @@ export function loadProtocolArtifacts(): { mockUsdc: ContractArtifact; torna: Co
   };
 }
 
-export function createLocalT0Session(config: LocalT0Config): LocalT0Session {
+export function createLocalT0Session(config: LocalT0Config | MonadTestnetConfig): LocalT0Session {
   return {
     config,
+    target: 'target' in config ? config.target : 'local',
     publicClient: createPublicClient({ transport: http(config.rpcUrl), pollingInterval: 100 }),
   };
 }
@@ -121,6 +127,9 @@ export async function readContractValue(
  * a copied environment file from broadcasting to Monad Testnet by mistake.
  */
 export async function preflightLocalT0(session: LocalT0Session): Promise<void> {
+  if (session.target !== 'local') {
+    throw new LocalT0ConfigurationError('Local runner refuses non-local execution configuration.');
+  }
   const actualChainId = await session.publicClient.getChainId();
   if (actualChainId !== session.config.chainId) {
     throw new LocalT0ChainMismatchError(session.config.chainId, actualChainId);
@@ -140,6 +149,37 @@ export async function preflightLocalT0(session: LocalT0Session): Promise<void> {
       throw new LocalT0ConfigurationError(
           `Local account ${actor} has no native balance for its required transaction gas.`);
     }
+  }
+}
+
+/** Read-only Testnet preflight. Broadcast opt-in is required by the config loader. */
+export async function preflightMonadTestnet(session: LocalT0Session): Promise<void> {
+  if (session.target !== 'testnet' || !('gasBudgetWei' in session.config)) {
+    throw new LocalT0ConfigurationError('Testnet preflight requires explicit Testnet configuration.');
+  }
+  const actualChainId = await session.publicClient.getChainId();
+  if (actualChainId !== MONAD_TESTNET_CHAIN_ID) {
+    throw new LocalT0ChainMismatchError(MONAD_TESTNET_CHAIN_ID, actualChainId);
+  }
+  loadProtocolArtifacts();
+  const actors = [
+    'deployer', 'verifier', 'submitter',
+    'lp01', 'lp02', 'lp03', 'lp04', 'lp05', 'lp06',
+  ] as const;
+  let totalBalance = 0n;
+  for (const actor of actors) {
+    const balance = await session.publicClient.getBalance({
+      address: session.config.accounts[actor].address,
+    });
+    if (balance === 0n) {
+      throw new LocalT0ConfigurationError(
+          `Testnet account ${actor} has no MON for its required transaction gas.`);
+    }
+    totalBalance += balance;
+  }
+  if (totalBalance < session.config.gasBudgetWei) {
+    throw new LocalT0ConfigurationError(
+        'Testnet signers have less combined MON than the explicitly configured gas budget.');
   }
 }
 

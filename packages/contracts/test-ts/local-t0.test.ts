@@ -25,6 +25,12 @@ import {
   validateLoopbackRpc,
 } from '../script/runtime/local-config';
 import {
+  loadMonadTestnetConfig,
+  TESTNET_BROADCAST_ACK,
+  TESTNET_MIN_BUDGET_MON,
+  validateMonadTestnetRpc,
+} from '../script/runtime/testnet-config';
+import {
   assertPublicT0RunContext,
   type LocalScenarioRuntime,
   type LocalT0Runtime,
@@ -127,6 +133,28 @@ test('local t0 rejects Monad Testnet chain IDs and non-loopback RPC URLs', () =>
   assert.throws(() => parseLocalChainId('10143'), LocalT0ConfigurationError);
   assert.throws(() => validateLoopbackRpc('https://rpc.monad.xyz'), LocalT0ConfigurationError);
   assert.throws(() => validateLoopbackRpc('http://user:pass@localhost:8545'), LocalT0ConfigurationError);
+});
+
+test('Testnet config requires explicit broadcast opt-in, budget, run ID and HTTPS RPC', () => {
+  assert.throws(() => validateMonadTestnetRpc('http://testnet-rpc.monad.xyz'), LocalT0ConfigurationError);
+  assert.throws(() => validateMonadTestnetRpc('https://localhost:8545'), LocalT0ConfigurationError);
+  const environment = {
+    TORNA_TESTNET_RPC_URL: 'https://testnet-rpc.monad.xyz',
+    TORNA_TESTNET_MNEMONIC: 'test test test test test test test test test test test junk',
+    RUN_ID: 'run-testnet-unit',
+    TORNA_TESTNET_BROADCAST: TESTNET_BROADCAST_ACK,
+    TORNA_TESTNET_GAS_BUDGET_MON: String(TESTNET_MIN_BUDGET_MON),
+  };
+  assert.throws(() => loadMonadTestnetConfig({...environment,
+    TORNA_TESTNET_BROADCAST: ''}), /explicitly enable Testnet writes/);
+  assert.throws(() => loadMonadTestnetConfig({...environment,
+    TORNA_TESTNET_GAS_BUDGET_MON: '14.9'}), /at least 15 MON/);
+  const config = loadMonadTestnetConfig(environment);
+  assert.equal(config.target, 'testnet');
+  assert.equal(config.chainId, 10143);
+  assert.equal(config.runId, 'run-testnet-unit');
+  assert.equal(config.gasBudgetWei, 15n * 10n ** 18n);
+  assert.equal('mnemonic' in config, false);
 });
 
 test('full local bundle rejects a public or missing ledger URL before connecting', () => {

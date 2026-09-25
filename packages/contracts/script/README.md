@@ -13,6 +13,7 @@ script/
   snapshot.ts               block-pinned chain capture, no-overwrite writer and checked manifest
   runtime/
     local-config.ts         explicit local environment parsing and account derivation
+    testnet-config.ts       explicit Monad Testnet opt-in, RPC and budget parsing
     ledger.ts               C ledger loader and read-only pre-run checks
     types.ts                public context; signing material is excluded
     errors.ts               explicit configuration and unsupported-state errors
@@ -91,6 +92,44 @@ corepack pnpm verify:bundle shared/snapshots/$RUN_ID
 The first command saves all 13 snapshots, C's same-run DB label map and a manifest.
 The second is the independent acceptance check. The local 2026-09-24 rehearsal
 passed this check; it is not a Monad Testnet execution or submission bundle.
+
+## Monad Testnet execution
+
+The separate Testnet command uses the same 13 receipt-checked handlers and the
+same throwaway **loopback** PostgreSQL ledger, but only accepts Monad Testnet
+(10143) over HTTPS. It never changes block time: the three loss/delay waits poll
+real block timestamps until their 120-second maturity. The 1-year and T+5 labels
+are replayed scenario-calendar time; all state transitions and block timestamps
+remain real. Testnet execution writes permanent public chain records and can
+consume the configured gas budget. Do not use a production mnemonic or shared
+database.
+
+Set these values only in the shell session used for the run; never commit or
+print the mnemonic or a credentialed RPC URL:
+
+| Variable | Requirement |
+| --- | --- |
+| `TORNA_TESTNET_RPC_URL` | HTTPS Monad Testnet RPC. Keep any provider credential private. |
+| `TORNA_TESTNET_MNEMONIC` | Dedicated throwaway Testnet mnemonic with the PRD's 15 derived accounts. |
+| `RUN_ID` | New unique ID beginning `run-testnet-`. |
+| `TORNA_TESTNET_BROADCAST` | Must be exactly `I_ACCEPT_TESTNET_GAS`; otherwise no runner starts. |
+| `TORNA_TESTNET_GAS_BUDGET_MON` | Explicit budget, at least 15 MON, and the derived signers together must hold at least this amount. |
+| `DATABASE_URL` | Disposable, seeded, loopback-only PostgreSQL URL; public or Supabase URLs are rejected. |
+
+After a local 13-point rehearsal has passed and all nine gas-paying accounts
+have been funded and checked, run:
+
+```bash
+corepack pnpm --filter @torna/contracts scenario:testnet-bundle
+corepack pnpm verify:bundle shared/snapshots/$RUN_ID
+```
+
+Preflight checks the actual chain ID, compiled artifacts and combined signer
+balance before the first deployment. That balance threshold is a floor, not a
+promise that the chosen budget will cover every transaction; Monad charges by
+gas limit. Use the 10-transaction rehearsal to measure per-signer gas before
+attempting the full ~800-transaction run. The command refuses an existing run
+directory or label file.
 
 ## Explicit local configuration
 
