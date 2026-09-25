@@ -674,6 +674,19 @@
   },
   {
     "type": "function",
+    "name": "exemptBootstrapIssuerFromRamp",
+    "inputs": [
+      {
+        "name": "issuer",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "externalDeployed",
     "inputs": [],
     "outputs": [
@@ -1933,6 +1946,19 @@
   },
   {
     "type": "event",
+    "name": "BootstrapRampExempted",
+    "inputs": [
+      {
+        "name": "issuer",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "CollateralDeposited",
     "inputs": [
       {
@@ -2430,6 +2456,11 @@
   {
     "type": "error",
     "name": "BootstrapNotConfigured",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "BootstrapRampExemptionUnavailable",
     "inputs": []
   },
   {

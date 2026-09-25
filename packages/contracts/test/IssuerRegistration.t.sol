@@ -8,6 +8,7 @@ import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.so
 
 contract IssuerRegistrationTest is ProtocolFixture {
     event IssuerRegistered(address indexed issuer, bytes32 acquirerHash, string name);
+    event BootstrapRampExempted(address indexed issuer);
 
     function register(uint256 index, string memory acquirerId, string memory name) internal {
         vm.prank(admin);
@@ -135,7 +136,7 @@ contract IssuerRegistrationTest is ProtocolFixture {
         assertFalse(torna.isIssuerRamping(issuers[0]));
     }
 
-    function testApprovedLocalDemoStartsWithTwoMatureIssuersAndAddsThreeNewOnes() public {
+    function testApprovedDemoExemptsTwoRealTimeRegistrationsAndRampsThreeNewOnes() public {
         vm.warp(1_800_000_000);
         register(0, unicode"ACQ-α", "HYBRID Travel Card");
         register(1, unicode"ACQ-β", "AURA Travel Card");
@@ -144,14 +145,21 @@ contract IssuerRegistrationTest is ProtocolFixture {
             torna.issuerRegistrationOf(issuers[i]);
         }
 
-        // Local test setup only: move the chain clock, never edit stored registration dates.
-        vm.warp(1_800_000_000 + 30 days);
+        vm.startPrank(admin);
+        vm.expectEmit(true, false, false, false, address(torna));
+        emit BootstrapRampExempted(issuers[0]);
+        torna.exemptBootstrapIssuerFromRamp(issuers[0]);
+        vm.expectEmit(true, false, false, false, address(torna));
+        emit BootstrapRampExempted(issuers[1]);
+        torna.exemptBootstrapIssuerFromRamp(issuers[1]);
+        vm.stopPrank();
+        assertEq(torna.issuerRegistrationOf(issuers[0]).registeredAt, block.timestamp);
+        assertEq(torna.issuerRegistrationOf(issuers[1]).registeredAt, block.timestamp);
         assertFalse(torna.isIssuerRamping(issuers[0]));
         assertFalse(torna.isIssuerRamping(issuers[1]));
         assertEq(torna.previewIssuerLimit(issuers[1], 600e6, 10_000e6, 2), 4000e6);
 
-        // Registration portion of t9 only, NOT the full 12-snapshot financial scenario.
-        vm.warp(block.timestamp + 365 days);
+        // Registration portion of t9 only, with no simulated calendar jump.
         register(2, unicode"ACQ-γ", "NOVA Travel Card");
         register(3, unicode"ACQ-δ", "MERIDIAN Travel Card");
         register(4, unicode"ACQ-ε", "KITE Travel Card");
@@ -165,6 +173,34 @@ contract IssuerRegistrationTest is ProtocolFixture {
         assertEq(torna.previewIssuerLimit(issuers[4], 600e6, 15_000e6, 5), 2000e6);
         assertFalse(torna.isIssuerRamping(issuers[0]));
         assertFalse(torna.isIssuerRamping(issuers[1]));
+    }
+
+    function testRampExemptionRejectsUnknownDuplicateLaterAndNonAdmin() public {
+        vm.prank(admin);
+        vm.expectRevert(Torna.BootstrapRampExemptionUnavailable.selector);
+        torna.exemptBootstrapIssuerFromRamp(issuers[0]);
+
+        register(0, unicode"ACQ-α", "HYBRID Travel Card");
+        register(1, unicode"ACQ-β", "AURA Travel Card");
+        vm.prank(submitter);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, submitter, bytes32(0)
+            )
+        );
+        torna.exemptBootstrapIssuerFromRamp(issuers[0]);
+
+        vm.prank(admin);
+        torna.exemptBootstrapIssuerFromRamp(issuers[0]);
+        vm.prank(admin);
+        vm.expectRevert(Torna.BootstrapRampExemptionUnavailable.selector);
+        torna.exemptBootstrapIssuerFromRamp(issuers[0]);
+
+        register(2, unicode"ACQ-γ", "NOVA Travel Card");
+        vm.prank(admin);
+        vm.expectRevert(Torna.BootstrapRampExemptionUnavailable.selector);
+        torna.exemptBootstrapIssuerFromRamp(issuers[2]);
+        assertTrue(torna.isIssuerRamping(issuers[2]));
     }
 
     function testFuzzRampUsesEachRegistrationTime(uint48 start, uint32 elapsed) public {

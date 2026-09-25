@@ -56,7 +56,7 @@ export function loadProtocolArtifacts(): { mockUsdc: ContractArtifact; torna: Co
 export function createLocalT0Session(config: LocalT0Config): LocalT0Session {
   return {
     config,
-    publicClient: createPublicClient({ transport: http(config.rpcUrl) }),
+    publicClient: createPublicClient({ transport: http(config.rpcUrl), pollingInterval: 100 }),
   };
 }
 

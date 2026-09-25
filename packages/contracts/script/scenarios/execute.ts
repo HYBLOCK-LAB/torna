@@ -61,8 +61,8 @@ import type { CapturePoint, ConfirmedTransaction, T0RunContext } from '../runtim
 
 const USDC = 1_000_000n;
 const ONE_THOUSAND_USDC = 1_000n * USDC;
-const THIRTY_DAYS = 30 * 24 * 60 * 60;
 const FIVE_DAYS = 5 * 24 * 60 * 60;
+const DEMO_MATURITY_SECONDS = 120;
 
 type LocalIssuerActor =
     'hybridIssuer'|'auraIssuer'|'novaIssuer'|'meridianIssuer'|'kiteIssuer';
@@ -105,7 +105,7 @@ export const T0_EXECUTION_ORDER = [
   'fund LP-03',
   'register HYBRID',
   'register AURA',
-  'advance local time by 30 days',
+  'exempt HYBRID and AURA from the bootstrap ramp',
   'deposit HYBRID collateral',
   'deposit AURA collateral',
   'seed reserve',
@@ -346,10 +346,6 @@ export async function verifyLiquidityDeposit(
   }
 }
 
-async function advanceLocalTime(session: LocalT0Session): Promise<void> {
-  await increaseLocalTime(session, THIRTY_DAYS);
-}
-
 async function increaseLocalTime(session: LocalT0Session, seconds: number): Promise<void> {
   const current = await session.publicClient.getBlock();
   const target = current.timestamp + BigInt(seconds);
@@ -404,7 +400,7 @@ async function depositCollateral(
 
 function adapterClients(session: LocalT0Session) {
   return {
-    publicClient: createPublicClient({transport: http(session.config.rpcUrl)}),
+    publicClient: createPublicClient({transport: http(session.config.rpcUrl), pollingInterval: 100}),
     submitter: createWalletClient({
       account: session.config.accounts.submitter,
       transport: http(session.config.rpcUrl),
@@ -451,11 +447,14 @@ export async function executeT0(
       [actors.hybridIssuer, hybridAcquirer, 'HYBRID Travel Card'], 'Register HYBRID issuer');
   await submitContract(session, 'deployer', context.torna, torna.abi, 'registerIssuer',
       [actors.auraIssuer, auraAcquirer, 'AURA Travel Card'], 'Register AURA issuer');
-  await advanceLocalTime(session);
-  const ramping = asBoolean(await readContractValue(
-      session, context.torna, torna.abi, 'isIssuerRamping', [actors.hybridIssuer]),
-  'Torna.isIssuerRamping');
-  if (ramping) throw new Error('Local time advance did not complete the 30-day issuer ramp period.');
+  for (const actor of [actors.hybridIssuer, actors.auraIssuer]) {
+    await submitContract(session, 'deployer', context.torna, torna.abi,
+        'exemptBootstrapIssuerFromRamp', [actor], 'Record bootstrap ramp exemption');
+    const ramping = asBoolean(await readContractValue(
+        session, context.torna, torna.abi, 'isIssuerRamping', [actor]),
+    'Torna.isIssuerRamping');
+    if (ramping) throw new Error('Bootstrap issuer still has the 30-day ramp limit.');
+  }
 
   await depositCollateral(session, context, 'hybridIssuer', 3_000n * USDC);
   await depositCollateral(session, context, 'auraIssuer', 600n * USDC);
@@ -588,6 +587,7 @@ async function issueAdvance(
     issuerActor: LocalIssuerActor,
     refundKey: Hex,
     acquirerHash: Hex,
+    maturitySeconds = FIVE_DAYS,
 ): Promise<IssuedAdvance> {
   const {torna} = loadProtocolArtifacts();
   const issuer = session.config.accounts[issuerActor];
@@ -597,7 +597,7 @@ async function issueAdvance(
     issuer: issuer.address,
     acquirerHash,
     amount: ONE_THOUSAND_USDC,
-    maturity: now + BigInt(FIVE_DAYS),
+    maturity: now + BigInt(maturitySeconds),
     nonce: asBigInt(await readContractValue(
         session, context.torna, torna.abi, 'advanceNonces', [issuer.address]),
     'Torna.advanceNonces'),
@@ -727,7 +727,8 @@ async function executeT1(
     const issuerActor = row?.issuer_id === 'AURA' ? 'auraIssuer' : 'hybridIssuer';
     const acquirerHash = row ? acquirerHashOf(row.acquirer_id) : context.t0.acquirerHash;
     const issued = await issueAdvance(
-        session, context, issuerActor, refundKey, acquirerHash);
+        session, context, issuerActor, refundKey, acquirerHash,
+        index === 364 ? DEMO_MATURITY_SECONDS : FIVE_DAYS);
     finalTransaction = issued.transaction;
     if (index < 364) {
       finalTransaction = await repayAdvance(session, context, issuerActor, refundKey);
@@ -736,7 +737,7 @@ async function executeT1(
     }
   }
   if (!yearlyLoss || !finalTransaction) throw new Error('t1 did not create its reviewed position.');
-  await increaseLocalTime(session, FIVE_DAYS + 1);
+  await increaseLocalTime(session, DEMO_MATURITY_SECONDS + 1);
   finalTransaction = await review(
       session, context, yearlyLoss, 'Upstream settlement agent non-receipt confirmation');
   scenarioState(context).yearlyLoss = yearlyLoss;
@@ -760,10 +761,11 @@ async function executeT3(
     const row = seededScenarioRow(ledger, seededId, 't3', 'AURA', 'ACQ-β');
     const key = row ? refundKeyOf(row.refund_id)
       : keccak256(stringToHex(`REF-LOCAL-AURA-${index + 1}`));
-    await issueAdvance(session, context, 'auraIssuer', key, auraAcquirer);
+    await issueAdvance(session, context, 'auraIssuer', key, auraAcquirer,
+        DEMO_MATURITY_SECONDS);
     keys.push(key);
   }
-  await increaseLocalTime(session, FIVE_DAYS + 1);
+  await increaseLocalTime(session, DEMO_MATURITY_SECONDS + 1);
   let finalTransaction: ConfirmedTransaction|undefined;
   for (const key of keys) {
     await review(session, context, key, 'Acquirer beta stopped settling');
@@ -833,8 +835,9 @@ async function executeT5(
   const row = seededScenarioRow(ledger, 'REF-2026-014', 't5', 'HYBRID', 'ACQ-α');
   const refundKey = row ? refundKeyOf(row.refund_id)
     : keccak256(stringToHex('REF-LOCAL-DELAYED'));
-  await issueAdvance(session, context, 'hybridIssuer', refundKey, context.t0.acquirerHash);
-  await increaseLocalTime(session, FIVE_DAYS + 1);
+  await issueAdvance(session, context, 'hybridIssuer', refundKey, context.t0.acquirerHash,
+      DEMO_MATURITY_SECONDS);
+  await increaseLocalTime(session, DEMO_MATURITY_SECONDS + 1);
   await review(session, context, refundKey, 'Delayed upstream settlement');
   const transaction = await repayAdvance(session, context, 'hybridIssuer', refundKey);
   scenarioState(context).delayedRepayment = refundKey;

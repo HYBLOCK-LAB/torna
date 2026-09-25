@@ -41,9 +41,13 @@ the matching Torna events. The runner still checks its exact t0 accounting and
 captures chain state. Its input is the example row from PROJECT_SPEC 10.6, **not**
 a DB query: no `creditLedger` call or cardholder-balance update is claimed by this
 command. The remaining scenario advances still use the local contract driver.
-The adapter currently computes maturity from `max(confirmed_at, chain time)` plus
-five business days; its README marks that historical-data rule as an assumption,
-so it is not yet an approved replacement for PROJECT_SPEC 10.6.
+The adapter computes ordinary maturity from chain time plus five business days.
+Scenario rows that require a same-run overdue review use a 120-second override.
+The local contract driver now uses that short maturity for t1, t3 and t5 and
+advances only the local Anvil clock to rehearse the wait. On public Testnet the
+runner must wait for real block time; it must not call Anvil time-control RPCs.
+The two initial issuers are registered at their real block time and receive
+explicit bootstrap-ramp exemptions. The three t9 issuers do not.
 
 The DB-backed path loads the seeded `REF-2026-001` row through C's ledger package.
 At t0, C's `processRefund` commits the real card-ledger credit, then the injected
