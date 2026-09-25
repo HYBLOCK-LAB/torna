@@ -129,7 +129,10 @@ export async function preflightLocalT0(session: LocalT0Session): Promise<void> {
     throw new LocalT0ConfigurationError('Local t0 refuses Monad Testnet (10143).');
   }
   loadProtocolArtifacts();
-  for (const actor of ['deployer', 'submitter', 'lp01', 'lp02', 'lp03'] as const) {
+  for (const actor of [
+    'deployer', 'verifier', 'submitter',
+    'lp01', 'lp02', 'lp03', 'lp04', 'lp05', 'lp06',
+  ] as const) {
     const balance = await session.publicClient.getBalance({
       address: session.config.accounts[actor].address,
     });

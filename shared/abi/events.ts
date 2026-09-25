@@ -1,4 +1,4 @@
-/** PRD event wire format. Declarations do not imply these operations exist yet. */
+/** Protocol event wire format. Declarations do not imply these operations exist yet. */
 export const tornaEvents = [
   {
     "type": "event",
@@ -164,6 +164,23 @@ export const tornaEvents = [
       },
       {
         "name": "coverage",
+        "type": "uint256",
+        "indexed": false
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "CorrelatedExposureFlagged",
+    "inputs": [
+      {
+        "name": "acquirerHash",
+        "type": "bytes32",
+        "indexed": true
+      },
+      {
+        "name": "principal",
         "type": "uint256",
         "indexed": false
       }

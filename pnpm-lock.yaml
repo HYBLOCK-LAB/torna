@@ -33,6 +33,12 @@ importers:
 
   packages/contracts:
     devDependencies:
+      '@torna/adapter':
+        specifier: workspace:*
+        version: link:../adapter
+      '@torna/ledger':
+        specifier: workspace:*
+        version: link:../ledger
       '@types/node':
         specifier: 22.10.2
         version: 22.10.2

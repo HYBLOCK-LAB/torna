@@ -1,6 +1,6 @@
 # Torna contracts
 
-Owner: Minseo (B). Local PoC, updated 2026-09-22.
+Owner: Minseo (B). Local PoC, updated 2026-09-24.
 
 ## Implemented
 
@@ -27,12 +27,15 @@ Owner: Minseo (B). Local PoC, updated 2026-09-22.
 - Unit/fuzz tests and a shared Solidity/viem hash vector.
 
 **Partial repayment is not implemented.** LP withdrawals now use NAV/share pricing:
-`requestWithdraw(principal)` pays `min(NAV × share, cash × share)` immediately and keeps
-the remainder pending until a repayment makes it payable. Completion removes the LP's
+`requestWithdraw(principal)` records `min(NAV × share, cash × share)` as the immediate
+quote without changing the t4 accounting snapshot. The permissionless `processWithdrawal()`
+keeper step pays that quote, and a later repayment automatically pays the pending remainder.
+Completion removes the LP's
 principal, proportional fee share and current LP-loss share. Post-bootstrap LP deposits are
 implemented with PRD cap-based partial acceptance. Loss execution is implemented locally but
 the current demo keeps one pending LP withdrawal at a time; a multi-request queue remains future work.
-the 13-timepoint chain runner and production snapshot generation are not complete.
+The local 13-timepoint Anvil runner now produces a verified bundle from a disposable
+Postgres ledger. Monad Testnet execution and production snapshot generation are not complete.
 Do not send real funds: use synthetic local test tokens only.
 
 ## Initial liquidity (D01 approved by Minseo, 2026-09-20)
@@ -188,8 +191,9 @@ protocol fees, collateral and unsolicited donations do not increase LP capacity.
 `totalLoss()` separately reports current collateral loss + reserve loss + LP loss for
 the public metrics view.
 Per-issuer/acquirer/aggregate outstanding and total successful count/amount are stored.
-Aggregate LP fees are distributed pro rata when an LP withdrawal completes; an active
-withdrawal's immediate payment is tracked separately until its pending remainder is paid.
+Aggregate LP fees are distributed pro rata when an LP withdrawal completes. The request-only
+t4 state remains observable before `processWithdrawal()` transfers the immediate quote; that
+payment is then tracked separately until a repayment releases the pending remainder.
 The admin seeds the fixed 500 USDC reserve once through `seedReserve`; the seed is
 tracked separately from fee-funded reserve balance and does not increase LP capacity.
 
@@ -246,7 +250,9 @@ The verifier owns the loss path through three role-gated calls:
 - `finalizeCoveredLoss(refundKey)` applies the PRD waterfall once. Issuer margin is
   charged first, then reserve, then LP loss. The position becomes `CoveredLoss` only
   when the same acquirer's cumulative coverage fits within `20%` of total LP principal;
-  otherwise it becomes `CapHeld`.
+  otherwise it becomes `CapHeld`. From the second finalized position for one acquirer
+  onward, `CorrelatedExposureFlagged` records the cumulative principal after each
+  finalization; the latest t3 event reports 4,000 USDC.
 - `recordRecovery(refundKey, recovered)` pulls the recovery amount from the verifier's
   allowance and settles every position grouped by the anchor's `acquirerHash`. Previously
   recognized loss is reconciled so issuer collateral is not charged twice, and all grouped
@@ -260,8 +266,8 @@ event aggregation is cleared so a future event can use the same acquirer. `Loss.
 PRD t3/t3b numbers, Review repayment, maturity and role checks, missing allowance,
 over-recovery rollback and duplicate recovery.
 
-The local contract gate passes, but the full 13-timepoint chain run, testnet deployment,
-and generated production snapshot bundle are not claimed here.
+The local 13-timepoint Anvil run and contract gate pass. Testnet deployment and a
+generated production snapshot bundle are not claimed here.
 
 ## Setup
 
@@ -315,10 +321,13 @@ This is a host-tool startup failure, not a Solidity test failure.
 
 ## Layout
 
-The local t0 runner and the remaining deployment/scenario boundaries are documented in
+The local scenario runner and its remaining boundaries are documented in
 [script/README.md](script/README.md). `corepack pnpm --filter @torna/contracts scenario:plan`
-displays the 13-timepoint plan without chain access. `scenario:t0` is the only wired
-chain path; later handlers and final bundle output remain unavailable.
+displays the 13-timepoint plan without chain access. `scenario:t0` remains the narrow
+smoke command, while `scenario:t6` runs and saves the continuous implemented segment from
+t0 through t6. Receipt-checked handlers and chain-derived capture are implemented through
+t6 and separately for t8/t9/t9b. The t7 gap still blocks the continuous run
+and final bundle output.
 
 - src/Torna.sol: roles, initial/ordinary liquidity, reserve, collateral, issuer/ramp
   queries, signed advances and full-principal repayments.
@@ -340,10 +349,13 @@ the same pure calculations and keeps event grouping in Torna.
 
 ## Next implementation gate
 
-Initial funding follows the approved D01 decision. Resolve the remaining decisions
-in DECISIONS.md before building the other stateful token flows.
-Then implement collateral withdrawal and extend the LP withdrawal accounting into the
-full timepoint runner alongside its tests.
+Initial funding follows the approved D01 decision. Loss, recovery, LP withdrawal and
+actual external-EOA idle deployment are implemented through t6. The t6 recall failure
+uses the EOA's absent MockUSDC allowance, rather than a simulated failure. Resolve the
+remaining t7 adapter/ledger boundary before extending the full timepoint runner.
+`confirmLedgerCredit(refundKey)` is now the SUBMITTER_ROLE-only retry acknowledgment;
+it records one event for an existing position and never changes monetary accounting.
+The adapter must check the actual DB row first. This contract cannot prove a DB write.
 `shared/abi/Torna.json` is generated from the current compiled implementation.
 Regenerate with `export:abi` after interface changes; do not hand-edit it.
 

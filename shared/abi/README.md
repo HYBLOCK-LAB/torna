@@ -15,7 +15,7 @@ Owner: Minseo (B). Version-one wire-format proposal, ready for consumer review.
 | Torna.json | Full ABI exported from the compiled implementation, including custom errors |
 | states.ts | Solidity enum indexes and snapshot-compatible state names |
 | reasons.ts | Advance rejection codes 1..8 and deposit rejection codes 1..2 |
-| events.ts | The 20 PRD protocol event ABI entries, including indexed fields |
+| events.ts | PRD protocol events plus the correlated-exposure event, including indexed fields |
 | fixtures/advance-request.json | Public fixed hashes consumed by Solidity and TypeScript tests |
 | fixtures/permit.json | Public Permit hashes checked by Solidity and TypeScript, without keys/signatures |
 | fixtures/collateral-deposit.json | Public collateral-action hashes checked by both languages |
@@ -29,13 +29,18 @@ AdvanceIssued or AdvanceRejected, full repayment emits AdvanceRepaid, and post-b
 LP deposits emit LiquidityDeposited plus DepositRejected for an unaccepted remainder.
 Loss execution now emits MarkedOverdue/ReviewOpened, CoveredLossFinalized or
 LossCapTriggered, and RecoveryRecorded through the verifier-only review/cap/recovery API.
-Partial repayment is still pending. LP withdrawal uses `requestWithdraw(principal)`:
-the immediate payment is `min(NAV × share, cash × share)` and any remainder is paid
-automatically after repayment. Completion removes the LP's proportional principal, fee
+From the second finalized position in one acquirer event onward,
+CorrelatedExposureFlagged(acquirerHash, principal) records the cumulative principal after
+each finalization. The most recent event is the current total; the local t3 event reaches
+4,000 USDC. It does not alter loss accounting or add a separate verifier action.
+Partial repayment is still pending. LP withdrawal uses `requestWithdraw(principal)` to record
+the immediate quote `min(NAV × share, cash × share)` without changing the request-only
+t4 snapshot. Permissionless `processWithdrawal()` transfers that quote; any remainder is paid
+automatically by a later repayment. Completion removes the LP's proportional principal, fee
 share and current LP-loss share.
 D01 also adds InitialLiquidityConfigured(address[3]) and
 InitialLiquidityCompleted(uint256) setup events in the compiled artifact; they are
-not part of the 20 PRD entries in events.ts. See the contracts README for the setup API.
+not part of the PRD entries in events.ts. See the contracts README for the setup API.
 Issuer registration metadata and the diagnostic ramp/limit queries are documented
 there too. Balance-derived status and signed advance execution are implemented;
 administrative suspension/removal remain pending. Loss-driven position transitions are
@@ -246,9 +251,10 @@ Deadline equality is accepted. Malformed signatures return reason 3 without ECDS
 Queries: `positionOf`, `issuerLimit`, `issuerStateOf`, `advanceNonces`,
 `issuerOutstanding`, `acquirerOutstanding`, `totalOutstanding`, `poolCapacity`,
 `poolCash`, `totalLpFees`, `reserveBalance`, `protocolFees`, `totalAdvanceCount`,
-`totalAdvanced`, `totalLpLoss`, `totalLoss`, `registeredIssuerCount`. The withdrawal call
-returns its immediate and pending amounts; the active request is also represented by
-the withdrawal events. Position `exists` is separate from enum zero;
+`totalAdvanced`, `totalLpLoss`, `totalLoss`, `registeredIssuerCount`. The withdrawal request
+returns its immediate and pending amounts; `processWithdrawal()` performs the quoted immediate
+transfer and the active request is also represented by the withdrawal events. Position `exists`
+is separate from enum zero;
 unknown keys revert. Margin/coverage are frozen loss terms, not individually locked collateral.
 Count includes all registered issuers; suspension does not increase other issuers' limits.
 External deployment is not enabled yet. LP withdrawals and per-LP fee settlement are
@@ -314,6 +320,46 @@ count, total advanced, collateral or fee balances. The position and per-issuer r
 nonce prevent replays. Partial/excess amount, mismatched issuer, unknown or terminal key,
 expired/invalid action, missing allowance, short transfer and backing deficits revert
 atomically. Partial repayment and collateral withdrawal remain open under D05.
+
+## External idle liquidity (t6)
+
+`idle.ts` exports the compiled-function subset used by t6 consumers.
+`setIdleVault(address)` is admin-only and accepts one external EOA, not a third
+deployed contract. Grant `TREASURY_ROLE` separately before calling `deployIdle` or
+`recallIdle`. `deployIdle(amount)` transfers actual MockUSDC to that EOA and rejects
+amounts that would exceed 50% of current `netAssetValue()` or available pool cash.
+It emits `IdleDeployed` only after the transfer. `poolCapacity()` is spendable
+capital (`netAssetValue() - externalDeployed()`), not NAV itself.
+
+`recallIdle(amount)` attempts MockUSDC `transferFrom(idleVault, Torna, amount)`.
+Without EOA allowance the token call fails naturally; Torna records
+`IdleWithdrawFailed`, sets `externalFrozen()` and leaves the outside balance and
+`externalDeployed()` unchanged. Further deployments are rejected while frozen.
+Consumers should query both token balances and the Torna state; an event alone is
+not proof of custody. There is no automatically approved unfreeze procedure.
+
+## Ledger credit retry acknowledgment (t7)
+
+`ledger-credit.ts` exports `confirmLedgerCredit(bytes32 refundKey)`. It is a
+recovery-only call, never part of normal advance + immediate ledger credit.
+Before the SUBMITTER_ROLE adapter wallet sends it, the adapter retry job must
+verify **all four** conditions:
+
+1. A matching `AdvanceIssued` log from Torna proves the original advance; a
+   successful transaction receipt by itself is insufficient.
+2. The ledger credit previously failed and this refund entered the retry queue.
+3. The retry succeeded and `ledger_credits` now contains exactly one row for
+   this `refund_key` (`UNIQUE(refund_key)` prevents a second row).
+4. Torna has not already emitted `LedgerCreditConfirmed` for this key.
+
+Torna independently checks that the position exists and that no prior
+confirmation was recorded; a repeat call reverts. The call moves no tokens and
+changes no advance, fee, loss or LP accounting. Its receipt emits one
+`LedgerCreditConfirmed(refundKey)` event.
+
+The event is the submitter's on-chain acknowledgment, **not** an independent
+on-chain proof that a DB row exists. The adapter owns that DB check and the
+`UNIQUE(refund_key)` idempotency guarantee. No full t7 DB retry run is claimed here.
 
 ## Identifier encoding
 

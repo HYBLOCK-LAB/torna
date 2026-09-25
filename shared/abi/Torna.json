@@ -170,6 +170,19 @@
   },
   {
     "type": "function",
+    "name": "TREASURY_ROLE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "VERIFIER_ROLE",
     "inputs": [],
     "outputs": [
@@ -434,6 +447,32 @@
   },
   {
     "type": "function",
+    "name": "confirmLedgerCredit",
+    "inputs": [
+      {
+        "name": "refundKey",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "deployIdle",
+    "inputs": [
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "depositCollateral",
     "inputs": [
       {
@@ -629,6 +668,32 @@
         "name": "",
         "type": "uint256",
         "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "externalDeployed",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "externalFrozen",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
       }
     ],
     "stateMutability": "view"
@@ -846,6 +911,19 @@
         "name": "",
         "type": "bytes32",
         "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "idleVault",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
       }
     ],
     "stateMutability": "view"
@@ -1071,6 +1149,19 @@
   },
   {
     "type": "function",
+    "name": "netAssetValue",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "openReview",
     "inputs": [
       {
@@ -1220,6 +1311,13 @@
   },
   {
     "type": "function",
+    "name": "processWithdrawal",
+    "inputs": [],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "protocolFees",
     "inputs": [],
     "outputs": [
@@ -1264,6 +1362,19 @@
       }
     ],
     "stateMutability": "pure"
+  },
+  {
+    "type": "function",
+    "name": "recallIdle",
+    "inputs": [
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
   },
   {
     "type": "function",
@@ -1617,6 +1728,19 @@
   },
   {
     "type": "function",
+    "name": "setIdleVault",
+    "inputs": [
+      {
+        "name": "vault",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "supportsInterface",
     "inputs": [
       {
@@ -1819,6 +1943,25 @@
       },
       {
         "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "CorrelatedExposureFlagged",
+    "inputs": [
+      {
+        "name": "acquirerHash",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "principal",
         "type": "uint256",
         "indexed": false,
         "internalType": "uint256"
@@ -2345,6 +2488,37 @@
   },
   {
     "type": "error",
+    "name": "IdleCapExceeded",
+    "inputs": [
+      {
+        "name": "limit",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "attempted",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "IdleFrozen",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "IdleVaultAlreadyConfigured",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "IdleVaultNotConfigured",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "InsufficientAssetBacking",
     "inputs": [
       {
@@ -2569,6 +2743,11 @@
   },
   {
     "type": "error",
+    "name": "InvalidIdleAmount",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "InvalidIssuerCount",
     "inputs": []
   },
@@ -2696,6 +2875,11 @@
   },
   {
     "type": "error",
+    "name": "LedgerCreditAlreadyConfirmed",
+    "inputs": []
+  },
+  {
+    "type": "error",
     "name": "LiquidityNotReady",
     "inputs": []
   },
@@ -2788,22 +2972,6 @@
     "type": "error",
     "name": "ReserveAlreadySeeded",
     "inputs": []
-  },
-  {
-    "type": "error",
-    "name": "SafeCastOverflowedUintDowncast",
-    "inputs": [
-      {
-        "name": "bits",
-        "type": "uint8",
-        "internalType": "uint8"
-      },
-      {
-        "name": "value",
-        "type": "uint256",
-        "internalType": "uint256"
-      }
-    ]
   },
   {
     "type": "error",

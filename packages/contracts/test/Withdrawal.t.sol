@@ -45,13 +45,17 @@ contract WithdrawalTest is ProtocolFixture {
         uint256 lpBalanceBefore = token.balanceOf(lps[2]);
         vm.expectEmit(true, false, false, true, address(torna));
         emit WithdrawRequested(lps[2], 2_000e6);
-        vm.expectEmit(true, false, false, true, address(torna));
-        emit WithdrawPaid(lps[2], expectedImmediate);
         vm.prank(lps[2]);
         (uint256 paid, uint256 waiting) = torna.requestWithdraw(2_000e6);
 
         assertEq(paid, expectedImmediate);
         assertEq(waiting, expectedPending);
+        assertEq(token.balanceOf(lps[2]), lpBalanceBefore);
+        assertEq(torna.poolCapacity(), 10_009_600_000);
+
+        vm.expectEmit(true, false, false, true, address(torna));
+        emit WithdrawPaid(lps[2], expectedImmediate);
+        torna.processWithdrawal();
         assertEq(token.balanceOf(lps[2]), lpBalanceBefore + expectedImmediate);
         assertEq(torna.lpPrincipal(lps[2]), 2_000e6);
         assertEq(torna.poolCapacity(), 8_807_680_000);
@@ -83,6 +87,7 @@ contract WithdrawalTest is ProtocolFixture {
         assertEq(torna.totalLoss(), 1_000e6);
         vm.prank(lps[2]);
         torna.requestWithdraw(2_000e6);
+        torna.processWithdrawal();
 
         uint256 lossShare = Math.mulDiv(lossBefore, 2_000e6, 10_000e6);
         assertEq(torna.totalLpLoss(), lossBefore - lossShare);

@@ -20,9 +20,16 @@ export interface LocalT0Actors {
   submitter: Address;
   hybridIssuer: Address;
   auraIssuer: Address;
+  novaIssuer: Address;
+  meridianIssuer: Address;
+  kiteIssuer: Address;
   lp01: Address;
   lp02: Address;
   lp03: Address;
+  lp04: Address;
+  lp05: Address;
+  lp06: Address;
+  idleVault: Address;
 }
 
 export interface ConfirmedTransaction {
@@ -45,6 +52,14 @@ export interface T0RunContext extends RunContext {
   actors: LocalT0Actors;
   /** Undefined until the receipt-checked t0 flow has completed. */
   t0?: T0ExecutionMetadata;
+  /** Public identifiers needed to continue one local t0 -> t9b run. */
+  scenario?: {
+    yearlyLoss?: Hex;
+    auraEvent: Hex[];
+    withdrawalAdvances: Hex[];
+    delayedRepayment?: Hex;
+    captureBlocks: Partial<Record<TimepointId, bigint>>;
+  };
 }
 
 const PRIVATE_CONTEXT_KEYS = new Set([
@@ -92,6 +107,15 @@ export interface LocalT0Runtime {
   preflight(): Promise<void>;
   deploy(): Promise<T0RunContext>;
   execute(context: T0RunContext): Promise<CapturePoint>;
+  capture(context: T0RunContext, point: CapturePoint): Promise<Snapshot>;
+  save(context: T0RunContext, snapshot: Snapshot): Promise<void>;
+}
+
+/** Receipt-checked local execution boundary for the currently implemented t0 -> t5 segment. */
+export interface LocalScenarioRuntime {
+  preflight(): Promise<void>;
+  deploy(): Promise<T0RunContext>;
+  execute(context: T0RunContext, timepointId: TimepointId): Promise<CapturePoint>;
   capture(context: T0RunContext, point: CapturePoint): Promise<Snapshot>;
   save(context: T0RunContext, snapshot: Snapshot): Promise<void>;
 }

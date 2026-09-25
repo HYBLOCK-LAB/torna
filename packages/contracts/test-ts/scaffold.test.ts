@@ -8,7 +8,12 @@ import {type Snapshot, TIMEPOINT_ORDER} from '../../../shared/types/snapshot';
 import {runScenarios, scaffoldRuntime} from '../script/run-scenarios';
 import {FullScenarioNotImplementedError} from '../script/runtime/errors';
 import type {RunContext, ScenarioRuntime} from '../script/runtime/types';
-import {describePlan, missingFeatures, scenarioPlan} from '../script/scenarios/plan';
+import {
+  describePlan,
+  implementedScenarioHandlers,
+  missingFeatures,
+  scenarioPlan,
+} from '../script/scenarios/plan';
 
 // In-memory orchestration fixture ONLY; never exported as a real chain
 // snapshot.
@@ -70,8 +75,11 @@ test(
       assert.ok(!missingFeatures(scenarioPlan[0]).includes('reserveSeed'));
       assert.ok(
           !missingFeatures(scenarioPlan.at(-1)!).includes('liquidityDeposit'));
+      assert.deepEqual(
+          [...implementedScenarioHandlers],
+          ['t0', 't1', 't2', 't3', 't3b', 't4', 't4b', 't5', 't6', 't7', 't8', 't9', 't9b']);
       assert.match(describePlan(), /PLAN ONLY/);
-      assert.match(describePlan(), /later scenario handlers/);
+      assert.match(describePlan(), /fresh loopback Postgres ledger/);
     });
 
 test(

@@ -1,8 +1,20 @@
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
-import type {Snapshot} from '../../../shared/types/snapshot';
-import {formatLocalT0ExecutionReport, runLocalT0} from '../script/run-scenarios';
+import {TIMEPOINT_ORDER, type Snapshot} from '../../../shared/types/snapshot';
+import {
+  formatLocalT0ExecutionReport,
+  LOCAL_T0_TO_T5,
+  LOCAL_T0_TO_T6,
+  LOCAL_T0_TO_T7,
+  LOCAL_T0_TO_T9B,
+  runLocalT0,
+  runLocalT0ToT5,
+  runLocalT0ToT6,
+  runLocalT0ToT7,
+  runLocalT0ToT9b,
+  validateLocalLedgerUrl,
+} from '../script/run-scenarios';
 import {
   LocalT0ConfigurationError,
   ReceiptEventMismatchError,
@@ -14,6 +26,7 @@ import {
 } from '../script/runtime/local-config';
 import {
   assertPublicT0RunContext,
+  type LocalScenarioRuntime,
   type LocalT0Runtime,
   type T0RunContext,
 } from '../script/runtime/types';
@@ -30,9 +43,16 @@ const context: T0RunContext = {
     submitter: '0x5555555555555555555555555555555555555555',
     hybridIssuer: '0x6666666666666666666666666666666666666666',
     auraIssuer: '0x7777777777777777777777777777777777777777',
+    novaIssuer: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+    meridianIssuer: '0xcccccccccccccccccccccccccccccccccccccccc',
+    kiteIssuer: '0xdddddddddddddddddddddddddddddddddddddddd',
     lp01: '0x8888888888888888888888888888888888888888',
     lp02: '0x9999999999999999999999999999999999999999',
     lp03: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    lp04: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+    lp05: '0xffffffffffffffffffffffffffffffffffffffff',
+    lp06: '0x1212121212121212121212121212121212121212',
+    idleVault: '0x1313131313131313131313131313131313131313',
   },
 };
 
@@ -75,6 +95,27 @@ function mockRuntime(calls: string[]): LocalT0Runtime {
   };
 }
 
+function mockSegmentRuntime(calls: string[]): LocalScenarioRuntime {
+  return {
+    async preflight() { calls.push('preflight'); },
+    async deploy() { calls.push('deploy'); return structuredClone(context); },
+    async execute(_context, id) {
+      calls.push(`execute:${id}`);
+      return {timepointId: id, blockNumber: BigInt(TIMEPOINT_ORDER.indexOf(id) + 2)};
+    },
+    async capture(_context, point) {
+      calls.push(`capture:${point.timepointId}`);
+      return {
+        ...structuredClone(snapshot),
+        timepointId: point.timepointId,
+        seq: TIMEPOINT_ORDER.indexOf(point.timepointId),
+        blockNumber: Number(point.blockNumber),
+      };
+    },
+    async save(_context, value) { calls.push(`save:${value.timepointId}`); },
+  };
+}
+
 test('local t0 preflight requires explicit local configuration', () => {
   assert.throws(
       () => loadLocalT0Config({RUN_ID: 'run-local-unit'}),
@@ -86,6 +127,14 @@ test('local t0 rejects Monad Testnet chain IDs and non-loopback RPC URLs', () =>
   assert.throws(() => parseLocalChainId('10143'), LocalT0ConfigurationError);
   assert.throws(() => validateLoopbackRpc('https://rpc.monad.xyz'), LocalT0ConfigurationError);
   assert.throws(() => validateLoopbackRpc('http://user:pass@localhost:8545'), LocalT0ConfigurationError);
+});
+
+test('full local bundle rejects a public or missing ledger URL before connecting', () => {
+  assert.equal(validateLocalLedgerUrl('postgres://user@127.0.0.1:15432/torna_test'),
+      'postgres://user@127.0.0.1:15432/torna_test');
+  assert.throws(() => validateLocalLedgerUrl(undefined), /loopback DATABASE_URL/);
+  assert.throws(() => validateLocalLedgerUrl('postgres://user@db.supabase.co/postgres'),
+      /loopback PostgreSQL DATABASE_URL/);
 });
 
 test('public deployment context has no signing configuration', () => {
@@ -117,6 +166,50 @@ test('local t0 always runs preflight, deploy, execute, capture, then save', asyn
   const calls: string[] = [];
   await runLocalT0(mockRuntime(calls));
   assert.deepEqual(calls, ['preflight', 'deploy', 'execute', 'capture', 'save']);
+});
+
+test('local t0 through t5 captures each confirmed point before continuing', async () => {
+  const calls: string[] = [];
+  await runLocalT0ToT5(mockSegmentRuntime(calls));
+  assert.deepEqual(calls, [
+    'preflight', 'deploy',
+    ...LOCAL_T0_TO_T5.flatMap(id => [
+      `execute:${id}`, `capture:${id}`, `save:${id}`,
+    ]),
+  ]);
+});
+
+test('local t0 through t6 captures the frozen state after its confirmed recall', async () => {
+  const calls: string[] = [];
+  await runLocalT0ToT6(mockSegmentRuntime(calls));
+  assert.deepEqual(calls, [
+    'preflight', 'deploy',
+    ...LOCAL_T0_TO_T6.flatMap(id => [
+      `execute:${id}`, `capture:${id}`, `save:${id}`,
+    ]),
+  ]);
+});
+
+test('local t0 through t7 captures the recovered ledger event before continuing', async () => {
+  const calls: string[] = [];
+  await runLocalT0ToT7(mockSegmentRuntime(calls));
+  assert.deepEqual(calls, [
+    'preflight', 'deploy',
+    ...LOCAL_T0_TO_T7.flatMap(id => [
+      `execute:${id}`, `capture:${id}`, `save:${id}`,
+    ]),
+  ]);
+});
+
+test('full local segment captures all thirteen points in order', async () => {
+  const calls: string[] = [];
+  await runLocalT0ToT9b(mockSegmentRuntime(calls));
+  assert.deepEqual(calls, [
+    'preflight', 'deploy',
+    ...LOCAL_T0_TO_T9B.flatMap(id => [
+      `execute:${id}`, `capture:${id}`, `save:${id}`,
+    ]),
+  ]);
 });
 
 test('a missing required receipt event prevents capture and snapshot save', async () => {

@@ -1,8 +1,8 @@
 import {TIMEPOINT_ORDER, type TimepointId} from '../../../../shared/types/snapshot';
 
 /**
- * Dependencies, not a claim that the scenario runner or adapters are
- * implemented.
+ * Available code boundaries, not evidence that a continuous DB-backed run
+ * or final snapshot bundle has succeeded.
  */
 export type Feature =|'initialLiquidity'|'issuerRegistration'|'collateral'|
     'advance'|'reserveSeed'|'repay'|'review'|'coveredLoss'|'recovery'|
@@ -15,7 +15,17 @@ export const implementedContractFeatures: ReadonlySet<Feature> = new Set([
   'reserveSeed',
   'advance',
   'repay',
+  'review',
+  'coveredLoss',
+  'recovery',
+  'withdrawal',
+  'idleDeployment',
+  'ledgerRetry',
   'liquidityDeposit',
+]);
+
+export const implementedScenarioHandlers: ReadonlySet<TimepointId> = new Set([
+  't0', 't1', 't2', 't3', 't3b', 't4', 't4b', 't5', 't6', 't7', 't8', 't9', 't9b',
 ]);
 
 export interface ScenarioPlan {
@@ -92,12 +102,14 @@ export function missingFeatures(step: ScenarioPlan): Feature[] {
 
 export function describePlan(): string {
   return [
-    'Torna scenario scaffold — PLAN ONLY; no RPC, wallets, transactions or files.',
-    'Only local t0 is wired; all later scenario handlers and bundle output remain unavailable.',
+    'Torna scenario plan — PLAN ONLY; no RPC, wallets, transactions or files.',
+    'All 13 local handlers are wired; a full local bundle requires a fresh loopback Postgres ledger and Anvil. Testnet execution remains separate.',
     ...scenarioPlan.map(step => {
       const missing = missingFeatures(step);
       return `${step.id}: ${step.description}\n  Missing features: ${
-          missing.join(', ') || 'none; execution handler still missing'}`;
+          missing.join(', ') || (implementedScenarioHandlers.has(step.id)
+            ? 'none; local handler ready'
+            : 'none; execution handler still missing')}`;
     }),
   ].join('\n');
 }

@@ -69,6 +69,7 @@ struct Position {
 struct LpWithdrawal {
     uint256 principal;
     uint256 paid;
+    // Before the first payment this is the full NAV claim. Each payment reduces it.
     uint256 pending;
 }
 
