@@ -81,7 +81,7 @@ await processRefund({ ..., retryStore: store,
   creditLedger: async () => { throw new Error('simulated ledger outage'); } });
 ```
 
-`confirmLedgerCredit`의 함수 정의는 `shared/abi`에 올라오기 전까지 `src/ledgerAck.ts`에 한 줄로 두었고, `Torna.json`에 함수가 생기면 `test/conformance.test.ts`가 자동으로 형식을 대조합니다.
+`confirmLedgerCredit`의 함수 정의는 `shared/abi/ledger-credit.ts`에서 가져오고, `test/conformance.test.ts`가 컴파일된 `shared/abi/Torna.json`과 형식을 대조합니다.
 
 ## 검증
 
