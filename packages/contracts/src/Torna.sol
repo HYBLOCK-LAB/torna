@@ -55,6 +55,7 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
     error UnexpectedTokenReceipt(uint256 expected, uint256 actual);
     error IssuerAlreadyRegistered(address issuer);
     error UnregisteredIssuer(address issuer);
+    error BootstrapRampExemptionUnavailable();
     error InvalidIssuerMetadata();
     error InvalidCollateralAmount();
     error CollateralAuthorizationExpired(uint256 deadline);
@@ -102,6 +103,7 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
     uint256 public constant LP_FEE_BPS = 8000;
     uint256 public constant RESERVE_FEE_BPS = 1330;
     mapping(address => IssuerRegistration) private _issuerRegistrations;
+    mapping(address => bool) private _bootstrapRampExempt;
     mapping(address => uint256) public collateralOf;
     mapping(address => uint256) public collateralDepositNonces;
     uint256 public totalCollateral;
@@ -199,6 +201,19 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
         emit IssuerRegistered(issuer, acquirerHash, name);
     }
 
+    /// @notice Demo bootstrap only: waive the ramp for either of the first two registered issuers.
+    /// @dev Registration time remains the real block time; later registrations cannot qualify.
+    function exemptBootstrapIssuerFromRamp(address issuer) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        if (
+            !_issuerRegistrations[issuer].exists || registeredIssuerCount > 2
+                || _bootstrapRampExempt[issuer]
+        ) {
+            revert BootstrapRampExemptionUnavailable();
+        }
+        _bootstrapRampExempt[issuer] = true;
+        emit BootstrapRampExempted(issuer);
+    }
+
     /// @notice Metadata only, not a claim that the issuer is funded or allowed to advance.
     function issuerRegistrationOf(address issuer) public view returns (IssuerRegistration memory) {
         if (!_issuerRegistrations[issuer].exists) revert UnregisteredIssuer(issuer);
@@ -208,7 +223,8 @@ contract Torna is AccessControl, EIP712, TornaEvents, ReentrancyGuard {
     /// @notice The first 30 days are restricted; exactly registeredAt + 30 days is unrestricted.
     function isIssuerRamping(address issuer) public view returns (bool) {
         IssuerRegistration memory registration = issuerRegistrationOf(issuer);
-        return block.timestamp < uint256(registration.registeredAt) + ISSUER_RAMP_PERIOD;
+        return !_bootstrapRampExempt[issuer]
+            && block.timestamp < uint256(registration.registeredAt) + ISSUER_RAMP_PERIOD;
     }
 
     /// @notice Diagnostic calculation on supplied balances/count, NOT spendable on-chain credit.

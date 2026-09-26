@@ -5,25 +5,9 @@ import { ProtocolFixture } from "./ProtocolFixture.sol";
 import { Torna } from "../src/Torna.sol";
 import { Limits } from "../src/libraries/Limits.sol";
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-
-/// @dev Only a gate probe, not an implementation of advance or ordinary deposits.
-contract LiquidityGateHarness is Torna {
-    constructor(IERC20Metadata asset_, address admin, address verifier, address submitter)
-        Torna(asset_, admin, verifier, submitter)
-    { }
-
-    function gateProbe() external view whenLiquidityReady returns (bool) {
-        return true;
-    }
-
-    function ordinaryDepositRoom(address lp, uint256 outstanding) external view returns (uint256) {
-        return Limits.depositRoom(totalLpPrincipal, lpPrincipal[lp], outstanding);
-    }
-}
 
 contract AdversarialReceiptToken is ERC20 {
     uint8 public mode;
@@ -60,11 +44,11 @@ contract AdversarialReceiptToken is ERC20 {
 }
 
 contract InitialLiquidityTest is ProtocolFixture {
-    LiquidityGateHarness internal pool;
+    Torna internal pool;
 
     function setUp() public override {
         super.setUp();
-        pool = new LiquidityGateHarness(token, admin, verifier, submitter);
+        pool = new Torna(token, admin, verifier, submitter);
     }
 
     function configure() internal {
@@ -185,15 +169,19 @@ contract InitialLiquidityTest is ProtocolFixture {
 
     function testGateRequiresAllThreeDeposits() public {
         vm.expectRevert(Torna.LiquidityNotReady.selector);
-        pool.gateProbe();
+        pool.depositLiquidity(1);
         configure();
         for (uint256 i; i < 3; ++i) {
             vm.expectRevert(Torna.LiquidityNotReady.selector);
-            pool.gateProbe();
+            pool.depositLiquidity(1);
             fund(i);
         }
-        assertTrue(pool.gateProbe());
         assertEq(pool.totalLpPrincipal(), 10_000e6);
+        vm.startPrank(lps[3]);
+        token.approve(address(pool), 1);
+        assertEq(pool.depositLiquidity(1), 1);
+        vm.stopPrank();
+        assertEq(pool.totalLpPrincipal(), 10_000e6 + 1);
     }
 
     function testCompletionEventAndPermanentClosureEvenForAdmin() public {
@@ -252,10 +240,10 @@ contract InitialLiquidityTest is ProtocolFixture {
         fund(0);
         fund(1);
         fund(2);
-        assertEq(pool.ordinaryDepositRoom(lps[0], 0), 0);
-        assertEq(pool.ordinaryDepositRoom(lps[1], 0), 1_166_666_666);
-        assertEq(pool.ordinaryDepositRoom(lps[2], 0), 2_166_666_666);
-        assertEq(pool.ordinaryDepositRoom(lps[3], 0), 4_166_666_666);
+        assertEq(pool.liquidityDepositRoom(lps[0]), 0);
+        assertEq(pool.liquidityDepositRoom(lps[1]), 1_166_666_666);
+        assertEq(pool.liquidityDepositRoom(lps[2]), 2_166_666_666);
+        assertEq(pool.liquidityDepositRoom(lps[3]), 4_166_666_666);
     }
 
     function receiptPool() internal returns (AdversarialReceiptToken odd, Torna target) {

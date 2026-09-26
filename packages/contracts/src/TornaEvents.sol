@@ -4,6 +4,7 @@ pragma solidity 0.8.24;
 /// @notice Wire events for registration, funding, advances, repayment and loss review.
 abstract contract TornaEvents {
     event IssuerRegistered(address indexed issuer, bytes32 acquirerHash, string name);
+    event BootstrapRampExempted(address indexed issuer);
     event CollateralDeposited(address indexed issuer, uint256 amount);
     event ReserveSeeded(uint256 amount);
     event IssuerMarginCall(address indexed issuer);

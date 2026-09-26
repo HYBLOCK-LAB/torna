@@ -24,6 +24,18 @@ export const tornaEvents = [
   },
   {
     "type": "event",
+    "name": "BootstrapRampExempted",
+    "inputs": [
+      {
+        "name": "issuer",
+        "type": "address",
+        "indexed": true
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
     "name": "CollateralDeposited",
     "inputs": [
       {

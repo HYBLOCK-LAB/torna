@@ -15,7 +15,7 @@ Owner: Minseo (B). Version-one wire-format proposal, ready for consumer review.
 | Torna.json | Full ABI exported from the compiled implementation, including custom errors |
 | states.ts | Solidity enum indexes and snapshot-compatible state names |
 | reasons.ts | Advance rejection codes 1..8 and deposit rejection codes 1..2 |
-| events.ts | PRD protocol events plus the correlated-exposure event, including indexed fields |
+| events.ts | PRD protocol events plus bootstrap-ramp exemption and correlated-exposure events, including indexed fields |
 | fixtures/advance-request.json | Public fixed hashes consumed by Solidity and TypeScript tests |
 | fixtures/permit.json | Public Permit hashes checked by Solidity and TypeScript, without keys/signatures |
 | fixtures/collateral-deposit.json | Public collateral-action hashes checked by both languages |
@@ -27,6 +27,9 @@ Initial LP funding emits LiquidityDeposited, admin issuer registration emits
 IssuerRegistered, collateral deposits emit CollateralDeposited, advances emit
 AdvanceIssued or AdvanceRejected, full repayment emits AdvanceRepaid, and post-bootstrap
 LP deposits emit LiquidityDeposited plus DepositRejected for an unaccepted remainder.
+The admin may explicitly waive the ramp for the first two registered demo issuers;
+BootstrapRampExempted(issuer) records that fact without changing registeredAt.
+Later registered issuers retain the ordinary 30-day ramp.
 Loss execution now emits MarkedOverdue/ReviewOpened, CoveredLossFinalized or
 LossCapTriggered, and RecoveryRecorded through the verifier-only review/cap/recovery API.
 From the second finalized position in one acquirer event onward,

@@ -7,6 +7,8 @@ import { TIMEPOINT_ORDER } from '../../../shared/types/snapshot';
 import {
   createLocalT0Session,
   deployProtocol,
+  measureTestnetGas,
+  preflightMonadTestnet,
   preflightLocalT0,
 } from './deploy';
 import {
@@ -22,6 +24,7 @@ import { describePlan } from './scenarios/plan';
 import { FullScenarioNotImplementedError } from './runtime/errors';
 import {loadT7LedgerIO, preflightT7LedgerIO, type T7LedgerIO} from './runtime/ledger';
 import { loadLocalT0Config, type LocalT0Config } from './runtime/local-config';
+import { loadMonadTestnetConfig, type MonadTestnetConfig } from './runtime/testnet-config';
 import {
   assertPublicT0RunContext,
   type CapturePoint,
@@ -93,10 +96,11 @@ export async function runScenarios(runtime: ScenarioRuntime = scaffoldRuntime): 
 }
 
 /** Create the narrow real-chain boundary without exposing signing configuration. */
-export function createLocalT0Runtime(config: LocalT0Config): LocalT0Runtime {
+export function createLocalT0Runtime(config: LocalT0Config | MonadTestnetConfig): LocalT0Runtime {
   const session = createLocalT0Session(config);
   return {
-    preflight: () => preflightLocalT0(session),
+    preflight: () => session.target === 'testnet'
+      ? preflightMonadTestnet(session) : preflightLocalT0(session),
     deploy: () => deployProtocol(session),
     execute: context => executeT0(session, context),
     capture: (context, point) => captureT0Snapshot(session, context, point),
@@ -120,11 +124,12 @@ export const createLocalT0ToT6Runtime = createLocalT0ToT5Runtime;
 
 /** Keep the DB handle private; bundle-producing callers must supply real ledger IO. */
 export function createLocalT0ToT7Runtime(
-    config: LocalT0Config, ledger: T7LedgerIO): LocalScenarioRuntime {
+    config: LocalT0Config | MonadTestnetConfig, ledger: T7LedgerIO): LocalScenarioRuntime {
   const session = createLocalT0Session(config);
   return {
     preflight: async () => {
-      await preflightLocalT0(session);
+      if (session.target === 'testnet') await preflightMonadTestnet(session);
+      else await preflightLocalT0(session);
       await preflightT7LedgerIO(ledger);
     },
     deploy: () => deployProtocol(session),
@@ -136,7 +141,7 @@ export function createLocalT0ToT7Runtime(
 
 /** Full local run additionally requires the seeded refund catalog for DB labels. */
 export function createLocalT0ToT9bRuntime(
-    config: LocalT0Config, ledger: T7LedgerIO): LocalScenarioRuntime {
+    config: LocalT0Config | MonadTestnetConfig, ledger: T7LedgerIO): LocalScenarioRuntime {
   if (ledger.scenarioRows?.length !== 378) {
     throw new Error('Full local run requires all 378 seeded ledger refunds.');
   }
@@ -174,7 +179,7 @@ export function formatLocalT0ExecutionReport(
  */
 export async function runLocalT0(
     runtime: LocalT0Runtime,
-    onExecutionConfirmed?: (context: T0RunContext, point: CapturePoint) => void,
+    onExecutionConfirmed?: (context: T0RunContext, point: CapturePoint) => void | Promise<void>,
 ): Promise<void> {
   await runtime.preflight();
   const context = await runtime.deploy();
@@ -183,7 +188,7 @@ export async function runLocalT0(
   if (point.timepointId !== 't0' || point.blockNumber < context.deploymentBlock) {
     throw new Error('Invalid local t0 capture point.');
   }
-  onExecutionConfirmed?.(context, point);
+  await onExecutionConfirmed?.(context, point);
   const snapshot = await runtime.capture(context, point);
   if (snapshot.runId !== context.runId || snapshot.timepointId !== 't0' || snapshot.seq !== 0
       || snapshot.chainId !== context.chainId
@@ -232,7 +237,7 @@ export async function runLocalT0ToT9b(
 
 /** Local-only complete run: C's DB label builder supplies the same-run label file. */
 export async function runLocalBundle(
-    config: LocalT0Config, databaseUrl: string,
+    config: LocalT0Config | MonadTestnetConfig, databaseUrl: string,
     onTimepointConfirmed?: (context: T0RunContext, point: CapturePoint) => void,
 ): Promise<void> {
   const sql = connect(validateLocalLedgerUrl(databaseUrl));
@@ -265,6 +270,38 @@ export async function runLocalBundle(
   } finally {
     await sql.end();
   }
+}
+
+/** Testnet path reuses the same receipt-checked handlers but waits on real block time. */
+export async function runTestnetBundle(
+    config: MonadTestnetConfig, databaseUrl: string,
+    onTimepointConfirmed?: (context: T0RunContext, point: CapturePoint) => void,
+): Promise<void> {
+  if (config.target !== 'testnet' || config.chainId !== 10143) {
+    throw new Error('Testnet bundle requires explicit Monad Testnet configuration.');
+  }
+  return runLocalBundle(config, databaseUrl, onTimepointConfirmed);
+}
+
+/** Small receipt-confirmed t0 rehearsal; reports gas by signer before saving one t0 snapshot. */
+export async function runTestnetSmoke(config: MonadTestnetConfig): Promise<void> {
+  if (config.target !== 'testnet' || config.chainId !== 10143) {
+    throw new Error('Testnet smoke requires explicit Monad Testnet configuration.');
+  }
+  if (await snapshotRunExists(config.runId)) {
+    throw new Error(`Refusing to reuse existing Testnet run ID: ${config.runId}.`);
+  }
+  const labelPath = resolve(LABEL_ROOT, `${config.runId}.json`);
+  try {
+    await access(labelPath);
+    throw new Error(`Refusing to reuse existing Testnet run ID: ${config.runId}.`);
+  } catch (error: unknown) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
+  const session = createLocalT0Session(config);
+  await runLocalT0(createLocalT0Runtime(config), async (context, point) => {
+    console.log(await measureTestnetGas(session, context, point.blockNumber));
+  });
 }
 
 async function runLocalSegment(
@@ -333,12 +370,29 @@ async function main(): Promise<void> {
             `Confirmed ${point.timepointId} at block ${point.blockNumber.toString()}.`));
     return;
   }
-  throw new Error('Usage: run-scenarios.ts [--plan | --t0 | --through-t5 | --through-t6 | --through-t9b | --execute]');
+  if (args.length === 1 && args[0] === '--testnet-bundle') {
+    await runTestnetBundle(
+        loadMonadTestnetConfig(), process.env.DATABASE_URL ?? '',
+        (_context, point) => console.log(
+            `Confirmed ${point.timepointId} at block ${point.blockNumber.toString()}.`));
+    return;
+  }
+  if (args.length === 1 && args[0] === '--testnet-smoke') {
+    await runTestnetSmoke(loadMonadTestnetConfig());
+    return;
+  }
+  throw new Error('Usage: run-scenarios.ts [--plan | --t0 | --through-t5 | --through-t6 | --through-t9b | --testnet-smoke | --testnet-bundle | --execute]');
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main().catch((error: unknown) => {
-    console.error(error instanceof Error ? error.message : 'Scenario runner failed');
+    const testnet = process.argv.includes('--testnet-bundle');
+    if (testnet) {
+      const name = error instanceof Error ? error.name : 'Error';
+      console.error(`Testnet scenario run failed (${name}). Sensitive RPC and signing values were not printed.`);
+    } else {
+      console.error(error instanceof Error ? error.message : 'Scenario runner failed');
+    }
     process.exitCode = 1;
   });
 }

@@ -406,8 +406,8 @@ export async function captureSnapshot(_context: RunContext, _point: CapturePoint
 }
 
 function snapshotDirectory(runId: string): string {
-  if (!/^run-local-[a-z0-9-]+$/.test(runId)) {
-    throw new Error('Snapshot runId must be a local run ID containing only lowercase letters, digits and hyphens.');
+  if (!/^run-(?:local|testnet)-[a-z0-9-]+$/.test(runId)) {
+    throw new Error('Snapshot runId must start with run-local- or run-testnet- and contain only lowercase letters, digits and hyphens.');
   }
   const output = resolve(SNAPSHOT_ROOT, runId);
   const relativeOutput = relative(SNAPSHOT_ROOT, output);

@@ -84,6 +84,26 @@ function accountAt(mnemonic: string, addressIndex: number): SigningAccount {
   }
 }
 
+export function deriveT0SigningAccounts(mnemonic: string): LocalT0SigningAccounts {
+  return {
+    deployer: accountAt(mnemonic, 0),
+    verifier: accountAt(mnemonic, 1),
+    submitter: accountAt(mnemonic, 2),
+    hybridIssuer: accountAt(mnemonic, 3),
+    auraIssuer: accountAt(mnemonic, 4),
+    novaIssuer: accountAt(mnemonic, 5),
+    meridianIssuer: accountAt(mnemonic, 6),
+    kiteIssuer: accountAt(mnemonic, 7),
+    lp01: accountAt(mnemonic, 8),
+    lp02: accountAt(mnemonic, 9),
+    lp03: accountAt(mnemonic, 10),
+    lp04: accountAt(mnemonic, 11),
+    lp05: accountAt(mnemonic, 12),
+    lp06: accountAt(mnemonic, 13),
+    idleVault: accountAt(mnemonic, 14),
+  };
+}
+
 export function publicActors(accounts: LocalT0SigningAccounts): LocalT0Actors {
   return {
     deployer: accounts.deployer.address,
@@ -118,22 +138,6 @@ export function loadLocalT0Config(
     throw new LocalT0ConfigurationError('RUN_ID for local t0 must start with "run-local-".');
   }
   const mnemonic = required(environment, LOCAL_T0_ENV.mnemonic);
-  const accounts = {
-    deployer: accountAt(mnemonic, 0),
-    verifier: accountAt(mnemonic, 1),
-    submitter: accountAt(mnemonic, 2),
-    hybridIssuer: accountAt(mnemonic, 3),
-    auraIssuer: accountAt(mnemonic, 4),
-    novaIssuer: accountAt(mnemonic, 5),
-    meridianIssuer: accountAt(mnemonic, 6),
-    kiteIssuer: accountAt(mnemonic, 7),
-    lp01: accountAt(mnemonic, 8),
-    lp02: accountAt(mnemonic, 9),
-    lp03: accountAt(mnemonic, 10),
-    lp04: accountAt(mnemonic, 11),
-    lp05: accountAt(mnemonic, 12),
-    lp06: accountAt(mnemonic, 13),
-    idleVault: accountAt(mnemonic, 14),
-  } satisfies LocalT0SigningAccounts;
+  const accounts = deriveT0SigningAccounts(mnemonic);
   return { rpcUrl, chainId, runId, accounts };
 }

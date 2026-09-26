@@ -28,6 +28,8 @@ contract ScenarioAccountingTest is ProtocolFixture {
         token.mint(admin, 500 * USDC);
         torna.registerIssuer(issuers[0], ACQUIRER_A, "HYBRID Travel Card");
         torna.registerIssuer(issuers[1], ACQUIRER_B, "AURA Travel Card");
+        torna.exemptBootstrapIssuerFromRamp(issuers[0]);
+        torna.exemptBootstrapIssuerFromRamp(issuers[1]);
         torna.configureInitialLiquidity([lps[0], lps[1], lps[2]]);
         vm.stopPrank();
 
@@ -50,7 +52,6 @@ contract ScenarioAccountingTest is ProtocolFixture {
         token.approve(address(torna), 500 * USDC);
         torna.seedReserve(500 * USDC);
         vm.stopPrank();
-        vm.warp(block.timestamp + 30 days);
     }
 
     function testT0ThroughT6AndIndependentT8ThroughT9bAccounting() public {

@@ -13,6 +13,7 @@ script/
   snapshot.ts               block-pinned chain capture, no-overwrite writer and checked manifest
   runtime/
     local-config.ts         explicit local environment parsing and account derivation
+    testnet-config.ts       explicit Monad Testnet opt-in, RPC and budget parsing
     ledger.ts               C ledger loader and read-only pre-run checks
     types.ts                public context; signing material is excluded
     errors.ts               explicit configuration and unsupported-state errors
@@ -41,9 +42,13 @@ the matching Torna events. The runner still checks its exact t0 accounting and
 captures chain state. Its input is the example row from PROJECT_SPEC 10.6, **not**
 a DB query: no `creditLedger` call or cardholder-balance update is claimed by this
 command. The remaining scenario advances still use the local contract driver.
-The adapter currently computes maturity from `max(confirmed_at, chain time)` plus
-five business days; its README marks that historical-data rule as an assumption,
-so it is not yet an approved replacement for PROJECT_SPEC 10.6.
+The adapter computes ordinary maturity from chain time plus five business days.
+Scenario rows that require a same-run overdue review use a 120-second override.
+The local contract driver now uses that short maturity for t1, t3 and t5 and
+advances only the local Anvil clock to rehearse the wait. On public Testnet the
+runner must wait for real block time; it must not call Anvil time-control RPCs.
+The two initial issuers are registered at their real block time and receive
+explicit bootstrap-ramp exemptions. The three t9 issuers do not.
 
 The DB-backed path loads the seeded `REF-2026-001` row through C's ledger package.
 At t0, C's `processRefund` commits the real card-ledger credit, then the injected
@@ -88,6 +93,52 @@ The first command saves all 13 snapshots, C's same-run DB label map and a manife
 The second is the independent acceptance check. The local 2026-09-24 rehearsal
 passed this check; it is not a Monad Testnet execution or submission bundle.
 
+## Monad Testnet execution
+
+The separate Testnet command uses the same 13 receipt-checked handlers and the
+same throwaway **loopback** PostgreSQL ledger, but only accepts Monad Testnet
+(10143) over HTTPS. It never changes block time: the three loss/delay waits poll
+real block timestamps until their 120-second maturity. The 1-year and T+5 labels
+are replayed scenario-calendar time; all state transitions and block timestamps
+remain real. Testnet execution writes permanent public chain records and can
+consume the configured gas budget. Do not use a production mnemonic or shared
+database.
+
+Set these values only in the shell session used for the run; never commit or
+print the mnemonic or a credentialed RPC URL:
+
+| Variable | Requirement |
+| --- | --- |
+| `TORNA_TESTNET_RPC_URL` | HTTPS Monad Testnet RPC. Keep any provider credential private. |
+| `TORNA_TESTNET_MNEMONIC` | Dedicated throwaway Testnet mnemonic with the PRD's 15 derived accounts. |
+| `RUN_ID` | New unique ID beginning `run-testnet-`. |
+| `TORNA_TESTNET_BROADCAST` | Must be exactly `I_ACCEPT_TESTNET_GAS`; otherwise no runner starts. |
+| `TORNA_TESTNET_GAS_BUDGET_MON` | Explicit budget, at least 15 MON, and the derived signers together must hold at least this amount. |
+| `DATABASE_URL` | Disposable, seeded, loopback-only PostgreSQL URL; public or Supabase URLs are rejected. |
+
+After a local 13-point rehearsal has passed, first run the small t0 gas rehearsal.
+It writes only the t0 snapshot and prints measured cost by signer; it is not a full
+bundle:
+
+```bash
+corepack pnpm --filter @torna/contracts scenario:testnet-smoke
+```
+
+Use a fresh `run-testnet-...` ID for each attempt. Review the actual gas-cost
+distribution and fund the nine gas-paying accounts before the full run:
+
+```bash
+corepack pnpm --filter @torna/contracts scenario:testnet-bundle
+corepack pnpm verify:bundle shared/snapshots/$RUN_ID
+```
+
+Preflight checks the actual chain ID, compiled artifacts and combined signer
+balance before the first deployment. That balance threshold is a floor, not a
+promise that the chosen budget will cover every transaction; Monad charges by
+gas limit. Use the t0 smoke result to measure per-signer gas before
+attempting the full ~800-transaction run. The command refuses an existing run
+directory or label file.
+
 ## Explicit local configuration
 
 Local chain commands require every setting below. There is no fallback mnemonic,
@@ -126,7 +177,7 @@ The required t0 sequence is receipt-confirmed in this order:
 
 1. Deploy MockUSDC and Torna, then verify the three contract roles.
 2. Mint local test tokens, configure LP-01/02/03, approve and deposit 5,000/3,000/2,000 USDC.
-3. Register HYBRID and AURA, advance only the local EVM clock by 30 days and confirm ramp-up ended.
+3. Register HYBRID and AURA at the actual block time, record their bootstrap-only ramp exemptions, and confirm the ramp flag is clear.
 4. Submit issuer-signed Permit-backed collateral deposits (3,000 and 600 USDC).
 5. Seed the one-time 500 USDC reserve.
 6. Ask the adapter to submit a signed 1,000 USDC advance and require a matching `AdvanceIssued` event.
