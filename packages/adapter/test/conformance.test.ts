@@ -63,8 +63,8 @@ const tornaAbi = JSON.parse(readFileSync(new URL('../../../shared/abi/Torna.json
 const compiledAck = (Array.isArray(tornaAbi) ? tornaAbi : tornaAbi.abi)
   .find((e: { type: string; name?: string }) => e.type === 'function' && e.name === 'confirmLedgerCredit');
 
-test('confirmLedgerCredit fragment matches the compiled Torna ABI',
-  { skip: compiledAck ? false : 'shared/abi/Torna.json does not export confirmLedgerCredit yet' }, () => {
+test('confirmLedgerCredit fragment matches the compiled Torna ABI', () => {
+    assert.ok(compiledAck, 'shared/abi/Torna.json must export confirmLedgerCredit');
     const [fragment] = ledgerAckAbi;
     assert.deepEqual(
       compiledAck.inputs.map((i: { type: string }) => i.type),
