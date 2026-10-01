@@ -200,8 +200,8 @@ export const NARRATIVE: Record<TimepointId, TimepointNarrative> = {
       en: 'Showing only losses hides why an LP would take part at all. You have to see how fast fees accrue before you can judge how large the later losses really are.',
     },
     designPoint: {
-      ko: '이 요약만 가정값이고 나머지 시나리오는 전부 실제 상태 변화입니다.',
-      en: 'This summary is the only assumed figure. Every other timepoint is a real state change.',
+      ko: '1년치 운영과 만기 주기는 재생된 시나리오 시간이고, 상태 변화는 전부 체인에서 실제로 일어났습니다.',
+      en: 'The year of operation and the maturity cycle are replayed scenario time; every state change really happened on chain.',
     },
     watch: [
       { screen: 'lp', text: {
@@ -503,10 +503,11 @@ export const NARRATIVE: Record<TimepointId, TimepointNarrative> = {
         chips: [{ k: { ko: '미상환', en: 'Outstanding' }, v: { ko: '{pool.advancedOutstanding:delta}', en: '{pool.advancedOutstanding:delta}' } },
           { k: { ko: '가동률', en: 'Utilisation' }, v: { ko: '{metrics.utilizationPct:pct}', en: '{metrics.utilizationPct:pct}' } }]},
       { screen: 'lp', text: {
-          ko: 'LP-03(지분 {lp.LP-03.sharePct:pct})이 지분 전액 {lp.LP-03.equity} 출금을 요청했습니다. 고정 통보기간도, 사전 통보 의무도 없습니다.',
-          en: 'LP-03, holding {lp.LP-03.sharePct:pct} of the pool, has asked to withdraw its entire stake of {lp.LP-03.equity}. There is no fixed notice period and no obligation to warn anyone in advance.',
+          ko: 'LP-03(지분 {lp.LP-03.sharePct:pct})이 지분 전액 출금을 요청했습니다 — 예치 원금은 {lp.LP-03.deposit}이지만 두 차례 손실을 거친 지금 평가액은 {lp.LP-03.equity}입니다. 고정 통보기간도, 사전 통보 의무도 없습니다.',
+          en: 'LP-03, holding {lp.LP-03.sharePct:pct} of the pool, has asked to withdraw its entire stake. It deposited {lp.LP-03.deposit}; after two losses that stake is now worth {lp.LP-03.equity}. There is no fixed notice period and no obligation to warn anyone in advance.',
         }, anchor: 'p-lp-rows',
-        chips: [{ k: { ko: '요청', en: 'Requested' }, v: { ko: '{lp.LP-03.equity}', en: '{lp.LP-03.equity}' } },
+        chips: [{ k: { ko: '예치 원금', en: 'Deposited' }, v: { ko: '{lp.LP-03.deposit}', en: '{lp.LP-03.deposit}' } },
+          { k: { ko: '지분 평가액', en: 'Stake value' }, v: { ko: '{lp.LP-03.equity}', en: '{lp.LP-03.equity}' } },
           { k: { ko: '통보기간', en: 'Notice' }, v: { ko: '없음', en: 'none' }, tone: 'ok' }]},
       { screen: 'lp', text: {
           ko: '이 중 {lp.LP-03.instant}이 즉시 지급됩니다 — 지분율 × 현금성 잔액이 한도입니다. 현금을 먼저 온 LP에게 전부 내주면 다른 LP 몫을 침범하고 선지급도 멈추기 때문입니다. 나머지 {lp.LP-03.queued}은 만기 도래분에서 D+5에 자동 지급됩니다 — 묶이는 금액은 그 LP 지분이 선지급으로 나가 있는 만큼입니다.',
@@ -565,8 +566,8 @@ export const NARRATIVE: Record<TimepointId, TimepointNarrative> = {
     dirty: ['issuer', 'pub'],
     changed: [
       { screen: 'issuer', text: {
-          ko: '만기 경과 → 검토 중 → 정상 상환. 세 단계를 지나는 동안 담보는 한 번도 차감되지 않았습니다.',
-          en: 'Overdue → under review → repaid. The position passed through three states and collateral was never touched.',
+          ko: '만기 경과 → 검토 중 → 정상 상환. 세 단계가 이벤트 로그에 차례로 남았고, 그동안 담보는 한 번도 차감되지 않았습니다.',
+          en: 'Overdue → under review → repaid. The three states are logged in order, and collateral was never touched along the way.',
         }, anchor: 'p-iss-pos',
         chips: [
           { k: { ko: '거친 상태', en: 'States passed' }, v: { ko: '3단계', en: '3' } },
@@ -604,8 +605,8 @@ export const NARRATIVE: Record<TimepointId, TimepointNarrative> = {
     },
     watch: [
       { screen: 'issuer', text: {
-          ko: '포지션이 세 단계를 지나 정상 상환으로 끝납니다. 상태 칸 아래 이력에 경로가 남습니다.',
-          en: 'The position passes through three states and ends as repaid. The path stays on the record, under the state in the table.',
+          ko: '포지션이 세 단계를 지나 정상 상환으로 끝납니다. 거쳐 온 경로는 온체인 이벤트 로그에 만기 경과 · 검토 · 상환 순으로 남습니다.',
+          en: 'The position passes through three states and ends as repaid. The path it took is on the record — overdue, review and repayment, in that order, in the on-chain event log.',
         }, anchor: 'p-iss-pos'},
       { screen: 'issuer', text: {
           ko: '담보 차감 0. 지연 동안 신규 선지급만 멈췄다가 상환과 함께 풀립니다 — 지연은 손실이 아니라 대기입니다.',

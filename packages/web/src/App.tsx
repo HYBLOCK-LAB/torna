@@ -940,6 +940,14 @@ function fieldLabel(path: string, lang: Lang): string {
 /* ── public view ─────────────────────────────────────────────── */
 
 function PublicView({ s, lang, settleSeconds, trail }: { s: Snapshot; lang: Lang; settleSeconds: number | null; trail: Array<{ id: string; value: number }> }) {
+  // The real bundle carries 748 events at timepoint 1 — a year of advances and
+  // repayments. Drawing them all is slow and unreadable, so the table shows the
+  // most recent few and says how many there are; the rest open on request.
+  const [evOpen, setEvOpen] = useState(false);
+  useEffect(() => setEvOpen(false), [s.timepointId]);
+  const EV_HEAD = 12;
+  const EV_OPEN = 100;
+  const evShown = s.events.slice(0, evOpen ? EV_OPEN : EV_HEAD);
   const p = s.pool;
   const m = s.metrics;
   const tvl = totalValueLocked(s);
@@ -1179,7 +1187,7 @@ function PublicView({ s, lang, settleSeconds, trail }: { s: Snapshot; lang: Lang
               </tr>
             </thead>
             <tbody>
-              {s.events.slice(0, 12).map((e, i) => (
+              {evShown.map((e, i) => (
                 <tr key={`${e.txHash}-${i}`}>
                   <td className="mono">
                     {n0(e.blockNumber)}
@@ -1199,6 +1207,19 @@ function PublicView({ s, lang, settleSeconds, trail }: { s: Snapshot; lang: Lang
             </tbody>
           </table>
         </div>
+        {s.events.length > evShown.length ? (
+          <p className="note evmore">
+            {t('pub.evShown', lang).replace('{shown}', n0(evShown.length)).replace('{total}', n0(s.events.length))}
+            {' '}
+            <button type="button" className="linkish" onClick={() => setEvOpen(true)}>
+              {t('pub.evMore', lang)}
+            </button>
+          </p>
+        ) : s.events.length > EV_HEAD ? (
+          <p className="note evmore">
+            {t('pub.evShown', lang).replace('{shown}', n0(evShown.length)).replace('{total}', n0(s.events.length))}
+          </p>
+        ) : null}
         <p className="note">{t('note.pastReturns', lang)}</p>
       </div>
 

@@ -11,8 +11,13 @@
 import type { Snapshot, BundleManifest, TimepointId, LabelMap } from '@shared/types/snapshot';
 import { TIMEPOINT_ORDER } from '@shared/types/snapshot';
 
-/** Change this one line when the real bundle lands. */
-const BUNDLE_DIR = 'sample';
+/**
+ * The run the demo reads. `sample` is the hand-built bundle used while the
+ * contract was being written; `run-testnet-20261001-a` is the real Monad
+ * Testnet run — one deployment, 13 timepoints, 806 events, produced by
+ * B(민서) and verified against the acceptance table in PROJECT_SPEC ch.7.
+ */
+const BUNDLE_DIR = 'run-testnet-20261001-a';
 
 const snapshotFiles = import.meta.glob<Snapshot>(
   '../../../shared/snapshots/*/t*.json',
