@@ -700,17 +700,24 @@ function seededScenarioRow(
 }
 
 async function executeT1(
-    session: LocalT0Session, context: T0RunContext, ledger?: T7LedgerIO): Promise<CapturePoint> {
+    session: LocalT0Session, context: T0RunContext, ledger?: T7LedgerIO,
+    resumeFrom = 0): Promise<CapturePoint> {
   if (!context.t0) throw new FullScenarioNotImplementedError();
   const {mockUsdc} = loadProtocolArtifacts();
-  // Preserve the exact t0 wallet balances, then fund only the remaining t1-through-t5 fees.
-  await submitContract(
-      session, 'deployer', context.asset, mockUsdc.abi, 'mint',
-      [context.actors.hybridIssuer, 110n * USDC], 'Mint remaining HYBRID scenario fees');
-  await submitContract(
-      session, 'deployer', context.asset, mockUsdc.abi, 'mint',
-      [context.actors.auraIssuer, ledger?.scenarioRows ? 600n * USDC : 12n * USDC],
-      'Mint AURA scenario fees');
+  if (!Number.isSafeInteger(resumeFrom) || resumeFrom < 0 || resumeFrom >= 365
+      || (resumeFrom > 0 && (session.target !== 'testnet' || !ledger?.scenarioRows))) {
+    throw new Error('Invalid audited t1 resume index.');
+  }
+  if (resumeFrom === 0) {
+    // Preserve the exact t0 wallet balances, then fund only the remaining t1-through-t5 fees.
+    await submitContract(
+        session, 'deployer', context.asset, mockUsdc.abi, 'mint',
+        [context.actors.hybridIssuer, 110n * USDC], 'Mint remaining HYBRID scenario fees');
+    await submitContract(
+        session, 'deployer', context.asset, mockUsdc.abi, 'mint',
+        [context.actors.auraIssuer, ledger?.scenarioRows ? 600n * USDC : 12n * USDC],
+        'Mint AURA scenario fees');
+  }
   const seeded = ledger?.scenarioRows?.filter(row => row.timepoint === 't1');
   const yearlyRows = seeded && [
     ...seeded.filter(row => row.refund_id !== 'REF-2026-021'),
@@ -722,7 +729,7 @@ async function executeT1(
   }
   let finalTransaction: ConfirmedTransaction|undefined;
   let yearlyLoss: Hex|undefined;
-  for (let index = 0; index < 365; index += 1) {
+  for (let index = resumeFrom; index < 365; index += 1) {
     const row = yearlyRows?.[index];
     const refundKey = row ? refundKeyOf(row.refund_id)
       : keccak256(stringToHex(`REF-LOCAL-YEAR-${String(index + 1).padStart(3, '0')}`));
@@ -749,6 +756,14 @@ async function executeT1(
       session, context, yearlyLoss, 'Upstream settlement agent non-receipt confirmation');
   scenarioState(context).yearlyLoss = yearlyLoss;
   return {timepointId: 't1', blockNumber: finalTransaction.blockNumber};
+}
+
+/** Resume only after a separate read-only audit proved every earlier t1 row repaid. */
+export async function resumeAuditedT1(
+    session: LocalT0Session, context: T0RunContext, ledger: T7LedgerIO,
+    resumeFrom: number): Promise<CapturePoint> {
+  if (resumeFrom === 0) throw new Error('A resume must skip confirmed t1 rows.');
+  return executeT1(session, context, ledger, resumeFrom);
 }
 
 async function executeT2(

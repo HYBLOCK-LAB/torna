@@ -4,6 +4,7 @@ import {
   createPublicClient,
   createWalletClient,
   encodeFunctionData,
+  fallback,
   formatEther,
   http,
   type Abi,
@@ -60,17 +61,27 @@ export function loadProtocolArtifacts(): { mockUsdc: ContractArtifact; torna: Co
 }
 
 export function createLocalT0Session(config: LocalT0Config | MonadTestnetConfig): LocalT0Session {
+  const testnet = 'target' in config && config.target === 'testnet';
+  // Testnet receipts can span many blocks. Avoid hammering the RPC while waiting,
+  // and tolerate short transport outages without changing the signed request.
+  const transportOptions = {timeout: 20_000, retryCount: 8, retryDelay: 500};
+  const transport = testnet
+    ? fallback([
+      http(config.rpcUrl, transportOptions),
+      http('https://testnet-rpc.monad.xyz', transportOptions),
+    ]) : http(config.rpcUrl);
   return {
     config,
     target: 'target' in config ? config.target : 'local',
-    publicClient: createPublicClient({ transport: http(config.rpcUrl), pollingInterval: 100 }),
+    publicClient: createPublicClient({transport, pollingInterval: testnet ? 1_000 : 100}),
   };
 }
 
 function wallet(session: LocalT0Session, actor: LocalT0Actor) {
   return createWalletClient({
     account: session.config.accounts[actor],
-    transport: http(session.config.rpcUrl),
+    transport: http(session.config.rpcUrl, session.target === 'testnet'
+      ? {timeout: 20_000, retryCount: 8, retryDelay: 500} : undefined),
   });
 }
 

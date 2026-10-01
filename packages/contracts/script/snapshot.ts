@@ -132,11 +132,16 @@ async function readAllLogs(
     point: CapturePoint,
 ): Promise<ParsedLog[]> {
   const {torna} = loadProtocolArtifacts();
-  const logs = await session.publicClient.getLogs({
-    address: context.torna,
-    fromBlock: context.deploymentBlock,
-    toBlock: point.blockNumber,
-  });
+  const logs = [];
+  const span = session.target === 'testnet' ? 200n : point.blockNumber - context.deploymentBlock + 1n;
+  for (let fromBlock = context.deploymentBlock; fromBlock <= point.blockNumber;
+    fromBlock += span) {
+    const end = fromBlock + span - 1n;
+    const toBlock = end < point.blockNumber ? end : point.blockNumber;
+    logs.push(...await session.publicClient.getLogs({
+      address: context.torna, fromBlock, toBlock,
+    }));
+  }
   return parseEventLogs({abi: torna.abi, logs, strict: false}) as unknown as ParsedLog[];
 }
 
@@ -155,12 +160,16 @@ async function readPositions(
       evidence.set(args.refundKey, args.evidence);
     }
   }
-  const raw = await Promise.all(issued.map(log => {
-    const refundKey = argsOf(log).refundKey;
-    if (typeof refundKey !== 'string') throw new Error('AdvanceIssued has no refundKey.');
-    return readContractValue(
-        session, context.torna, torna.abi, 'positionOf', [refundKey], point.blockNumber);
-  }));
+  const raw: unknown[] = [];
+  const batchSize = session.target === 'testnet' ? 6 : issued.length;
+  for (let offset = 0; offset < issued.length; offset += batchSize) {
+    raw.push(...await Promise.all(issued.slice(offset, offset + batchSize).map(log => {
+      const refundKey = argsOf(log).refundKey;
+      if (typeof refundKey !== 'string') throw new Error('AdvanceIssued has no refundKey.');
+      return readContractValue(
+          session, context.torna, torna.abi, 'positionOf', [refundKey], point.blockNumber);
+    })));
+  }
   const snapshots = raw.map((position, index): PositionSnapshot => {
     const log = issued[index]!;
     const args = argsOf(log);
@@ -361,7 +370,9 @@ export async function captureScenarioSnapshot(
     blockNumber: Number(point.blockNumber),
     capturedAt: new Date(Number(block.timestamp) * 1000).toISOString(),
     amountUnit: 'USDC',
-    note: 'Generated from one continuous local chain run; amounts are converted from six-decimal base units.',
+    note: session.target === 'testnet'
+      ? 'Generated from one Monad Testnet deployment; amounts are converted from six-decimal base units.'
+      : 'Generated from one continuous local chain run; amounts are converted from six-decimal base units.',
     pool: {
       lpDeposits: toUsdc(totalPrincipal),
       lpFeeAccrued: toUsdc(totalFees),
@@ -501,7 +512,9 @@ export async function finalizeLocalBundle(context: T0RunContext): Promise<void> 
     schemaVersion: 1,
     runId: context.runId,
     generatedAt: new Date().toISOString(),
-    source: 'One continuous local Anvil rehearsal with seeded Postgres ledger',
+    source: context.chainId === 10143
+      ? 'One Monad Testnet deployment with seeded Postgres ledger'
+      : 'One continuous local Anvil rehearsal with seeded Postgres ledger',
     timepoints: snapshots.map(snapshot => ({
       timepointId: snapshot.timepointId,
       seq: snapshot.seq,
