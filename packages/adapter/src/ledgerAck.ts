@@ -5,18 +5,18 @@
  * reverts for an unknown position or an already-confirmed key, moves no money,
  * emits LedgerCreditConfirmed(refundKey).
  *
- * The event ABI comes from shared/abi/events.ts. The function fragment is
- * declared here until shared/abi exports it; test/conformance.test.ts checks it
- * against shared/abi/Torna.json as soon as the compiled ABI contains it.
+ * The event ABI comes from shared/abi/events.ts and the function fragment from
+ * shared/abi/ledger-credit.ts; test/conformance.test.ts checks the fragment
+ * against the compiled shared/abi/Torna.json.
  */
-import { parseAbi, parseEventLogs, type Hex } from 'viem';
+import { parseEventLogs, type Hex } from 'viem';
 
 import { tornaEvents } from '../../../shared/abi/events';
+import { ledgerCreditAbi } from '../../../shared/abi/ledger-credit';
 import type { AdapterClients } from './chain';
 import type { Deployment } from './sign';
 
-export const CONFIRM_LEDGER_CREDIT_SIGNATURE = 'function confirmLedgerCredit(bytes32 refundKey)';
-export const ledgerAckAbi = parseAbi([CONFIRM_LEDGER_CREDIT_SIGNATURE]);
+export const ledgerAckAbi = ledgerCreditAbi;
 
 /** Condition 1: a matching AdvanceIssued log from Torna, read from the advance receipt. */
 export async function hasAdvanceIssuedLog(
