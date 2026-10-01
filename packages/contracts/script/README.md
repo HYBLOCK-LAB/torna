@@ -140,8 +140,9 @@ attempting the full ~800-transaction run. The command refuses an existing run
 directory or label file.
 
 The default failure policy remains a new deployment and run ID, as required by
-PROJECT_SPEC section 12. The `run-testnet-20261001-a` submission used an explicit
-team-lead exception reported by Minseo after an RPC interruption during t1.
+PROJECT_SPEC section 12. After an RPC interruption during t1, Minseo directed
+the `run-testnet-20261001-a` recovery on the existing deployment. This differs
+from the documented restart rule and needs team-lead review before merging.
 Its read-only `--audit-testnet-resume` path required the saved t0 snapshot,
 exactly matching ordered issue/repayment logs for every completed t1 refund,
 the original one-credit/one-retry ledger state and no pending submitter
