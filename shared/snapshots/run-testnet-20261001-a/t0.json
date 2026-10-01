@@ -1,0 +1,236 @@
+{
+  "schemaVersion": 1,
+  "runId": "run-testnet-20261001-a",
+  "timepointId": "t0",
+  "seq": 0,
+  "label": {
+    "en": "Cardholder refund experience",
+    "ko": "사용자 앱 환불 체험"
+  },
+  "chainId": 10143,
+  "contract": "0xc43121a73e3e4a46b6a2a8827a34d9a324138ed6",
+  "blockNumber": 67214282,
+  "capturedAt": "2026-10-01T08:51:56.000Z",
+  "amountUnit": "USDC",
+  "note": "Generated from one continuous local chain run; amounts are converted from six-decimal base units.",
+  "pool": {
+    "lpDeposits": 10000,
+    "lpFeeAccrued": 2.4,
+    "lpLossApplied": 0,
+    "netAssetValue": 10002.4,
+    "advancedOutstanding": 0,
+    "cashAvailable": 10002.4,
+    "reserve": 500.399,
+    "reserveUsed": 0,
+    "capHeld": 0,
+    "externalDeployed": 0,
+    "externalFrozen": false,
+    "protocolFee": 0.201
+  },
+  "issuers": [
+    {
+      "key": "HYBRID",
+      "name": "HYBRID Travel Card",
+      "acquirerHash": "0xb458d4d1175f4890b44d8164de0a594387b811b3296fa604f5270258903aaf44",
+      "collateralInitial": 3000,
+      "collateralRemaining": 3000,
+      "outstanding": 0,
+      "effectiveLimit": 5001.2,
+      "rampUp": false,
+      "state": "Active"
+    },
+    {
+      "key": "AURA",
+      "name": "AURA Travel Card",
+      "acquirerHash": "0x825bae432ee10e70010b18fe067484e2d8a217b5265255b1bf30d7f9979297b1",
+      "collateralInitial": 600,
+      "collateralRemaining": 600,
+      "outstanding": 0,
+      "effectiveLimit": 4000,
+      "rampUp": false,
+      "state": "Active"
+    }
+  ],
+  "liquidityProviders": [
+    {
+      "name": "LP-01",
+      "deposit": 5000,
+      "sharePct": 50
+    },
+    {
+      "name": "LP-02",
+      "deposit": 3000,
+      "sharePct": 30
+    },
+    {
+      "name": "LP-03",
+      "deposit": 2000,
+      "sharePct": 20
+    }
+  ],
+  "positions": [
+    {
+      "refundKey": "0x0e56a8cdd31615a3cd9121754dce145c7713c54b328055d069d6b604089c97c5",
+      "issuer": "HYBRID",
+      "acquirerHash": "0xb458d4d1175f4890b44d8164de0a594387b811b3296fa604f5270258903aaf44",
+      "amount": 1000,
+      "fee": 3,
+      "issuerMargin": 200,
+      "poolCoverage": 800,
+      "state": "Repaid",
+      "evidence": null,
+      "txHash": "0x8454bf9d14f6296af9c73ce864e0ef5d876122f077b99372b13840b19bc35af2",
+      "createdAtTimepoint": 0
+    }
+  ],
+  "metrics": {
+    "cumulativeCount": 1,
+    "cumulativeAdvanced": 1000,
+    "lossTotal": 0,
+    "lossRatePct": 0,
+    "repayRatePct": 100,
+    "utilizationPct": 0,
+    "acquirerTopExposure": 0,
+    "acquirerExposureLimit": 5001.2,
+    "lpDepositCap": 16666.666666,
+    "rejectedRequests": 0
+  },
+  "events": [
+    {
+      "blockNumber": 67214282,
+      "name": "AdvanceRepaid",
+      "target": "0x0e56a8cdd31615a3cd9121754dce145c7713c54b328055d069d6b604089c97c5",
+      "amount": 1000,
+      "txHash": "0x3966ae28045b6bd4a8f5e20aa7d1139fd91b3c4668aae967f54e320a2ec5180f",
+      "timepointSeq": 0
+    },
+    {
+      "blockNumber": 67214277,
+      "name": "AdvanceIssued",
+      "target": "0x0e56a8cdd31615a3cd9121754dce145c7713c54b328055d069d6b604089c97c5",
+      "amount": 1000,
+      "txHash": "0x8454bf9d14f6296af9c73ce864e0ef5d876122f077b99372b13840b19bc35af2",
+      "timepointSeq": 0
+    },
+    {
+      "blockNumber": 67214273,
+      "name": "ReserveSeeded",
+      "target": "protocol",
+      "amount": 500,
+      "txHash": "0xcfd851102b97a6069506ae410daeae575136e8f44d66f40f7a32e5152d33bd8e",
+      "timepointSeq": 0
+    },
+    {
+      "blockNumber": 67214266,
+      "name": "CollateralDeposited",
+      "target": "AURA",
+      "amount": 600,
+      "txHash": "0x8887915a5e6202cdb8f425c41371a5a2861ae317eab4bebef4e2c34dc82861f5",
+      "timepointSeq": 0
+    },
+    {
+      "blockNumber": 67214262,
+      "name": "CollateralDeposited",
+      "target": "HYBRID",
+      "amount": 3000,
+      "txHash": "0xce5708fa3e6201e5cfbf47627942cf7c3d4df54eb6e830aec89d1e051b8c4b93",
+      "timepointSeq": 0
+    },
+    {
+      "blockNumber": 67214258,
+      "name": "BootstrapRampExempted",
+      "target": "AURA",
+      "amount": 0,
+      "txHash": "0xd030e93736da12544666e254996520a779e79f3614163433053c16ea5e9343a3",
+      "timepointSeq": 0
+    },
+    {
+      "blockNumber": 67214254,
+      "name": "BootstrapRampExempted",
+      "target": "HYBRID",
+      "amount": 0,
+      "txHash": "0x262bcb7ba56a75160e539cca15dd420f36c2647c6d8c3e0a974214e8c44f4d7b",
+      "timepointSeq": 0
+    },
+    {
+      "blockNumber": 67214251,
+      "name": "IssuerRegistered",
+      "target": "AURA",
+      "amount": 0,
+      "txHash": "0x63cf850292e46425ee4fa86862326877353a615fb3dd98e317d8d79919f9772e",
+      "timepointSeq": 0
+    },
+    {
+      "blockNumber": 67214248,
+      "name": "IssuerRegistered",
+      "target": "HYBRID",
+      "amount": 0,
+      "txHash": "0x96df81f6e7f74ac6a099cb3d23ee7daae2c806bb426576712e19a1e39c6a4eaf",
+      "timepointSeq": 0
+    },
+    {
+      "blockNumber": 67214245,
+      "name": "InitialLiquidityCompleted",
+      "target": "protocol",
+      "amount": 10000,
+      "txHash": "0x2e705551a7736725fc449ee213f74eeb05a0d2c611e1e17de681cf06201b5a00",
+      "timepointSeq": 0
+    },
+    {
+      "blockNumber": 67214245,
+      "name": "LiquidityDeposited",
+      "target": "LP-03",
+      "amount": 2000,
+      "txHash": "0x2e705551a7736725fc449ee213f74eeb05a0d2c611e1e17de681cf06201b5a00",
+      "timepointSeq": 0
+    },
+    {
+      "blockNumber": 67214239,
+      "name": "LiquidityDeposited",
+      "target": "LP-02",
+      "amount": 3000,
+      "txHash": "0x0e23d9af4fed9c3592379b056d20c9396763a26f6a56afe108dbe42fe5c608ca",
+      "timepointSeq": 0
+    },
+    {
+      "blockNumber": 67214232,
+      "name": "LiquidityDeposited",
+      "target": "LP-01",
+      "amount": 5000,
+      "txHash": "0x43b2fb14c017e17f92add8a5c5dd9c288220f84c23c2f0a462ba760ab9e331df",
+      "timepointSeq": 0
+    },
+    {
+      "blockNumber": 67214226,
+      "name": "InitialLiquidityConfigured",
+      "target": "protocol",
+      "amount": 0,
+      "txHash": "0xd5bd462ad9cd77a865f2a7ec00a8ec540da6a4c3c329f882f7717fbff1f7b67a",
+      "timepointSeq": 0
+    },
+    {
+      "blockNumber": 67214202,
+      "name": "RoleGranted",
+      "target": "protocol",
+      "amount": 0,
+      "txHash": "0xa36d9a5811b38a6d0b48ce54b0f95f60b2b8163f3c527d39ed6647a6b0631930",
+      "timepointSeq": 0
+    },
+    {
+      "blockNumber": 67214202,
+      "name": "RoleGranted",
+      "target": "protocol",
+      "amount": 0,
+      "txHash": "0xa36d9a5811b38a6d0b48ce54b0f95f60b2b8163f3c527d39ed6647a6b0631930",
+      "timepointSeq": 0
+    },
+    {
+      "blockNumber": 67214202,
+      "name": "RoleGranted",
+      "target": "protocol",
+      "amount": 0,
+      "txHash": "0xa36d9a5811b38a6d0b48ce54b0f95f60b2b8163f3c527d39ed6647a6b0631930",
+      "timepointSeq": 0
+    }
+  ]
+}

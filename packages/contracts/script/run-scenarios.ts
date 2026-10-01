@@ -19,12 +19,13 @@ import {
   saveT0Snapshot,
   snapshotRunExists,
 } from './snapshot';
-import { executeScenario, executeT0 } from './scenarios/execute';
+import { executeScenario, executeT0, resumeAuditedT1 } from './scenarios/execute';
 import { describePlan } from './scenarios/plan';
 import { FullScenarioNotImplementedError } from './runtime/errors';
 import {loadT7LedgerIO, preflightT7LedgerIO, type T7LedgerIO} from './runtime/ledger';
 import { loadLocalT0Config, type LocalT0Config } from './runtime/local-config';
 import { loadMonadTestnetConfig, type MonadTestnetConfig } from './runtime/testnet-config';
+import {auditTestnetT1Resume} from './runtime/testnet-resume';
 import {
   assertPublicT0RunContext,
   type CapturePoint,
@@ -283,6 +284,60 @@ export async function runTestnetBundle(
   return runLocalBundle(config, databaseUrl, onTimepointConfirmed);
 }
 
+/** Explicit exception path: reuse one deployed Testnet run only after auditing every t1 row. */
+export async function resumeTestnetBundle(
+    config: MonadTestnetConfig, databaseUrl: string,
+    onTimepointConfirmed?: (context: T0RunContext, point: CapturePoint) => void,
+    auditOnly = false,
+): Promise<void> {
+  const sql = connect(validateLocalLedgerUrl(databaseUrl));
+  try {
+    const ledger = await loadT7LedgerIO(sql);
+    const session = createLocalT0Session(config);
+    await preflightMonadTestnet(session);
+    const checkpoint = await auditTestnetT1Resume(session, ledger);
+    console.log(JSON.stringify({
+      runId: config.runId,
+      confirmedT1Refunds: checkpoint.resumeFrom,
+      nextRefundId: checkpoint.nextRefundId,
+      submitterConfirmedNonce: checkpoint.confirmedNonce,
+      auditOnly,
+    }));
+    if (auditOnly) return;
+    const context = checkpoint.context;
+    let previousBlock = context.scenario!.captureBlocks.t0!;
+    const remaining = TIMEPOINT_ORDER.slice(1);
+    for (const id of remaining) {
+      const point = id === 't1'
+        ? await resumeAuditedT1(session, context, ledger, checkpoint.resumeFrom)
+        : await executeScenario(session, context, id, ledger);
+      assertPublicT0RunContext(context);
+      if (point.timepointId !== id || point.blockNumber < previousBlock) {
+        throw new Error(`Invalid resumed Testnet capture point for ${id}.`);
+      }
+      onTimepointConfirmed?.(context, point);
+      const snapshot = await captureScenarioSnapshot(session, context, point);
+      if (snapshot.runId !== context.runId || snapshot.timepointId !== id
+          || snapshot.seq !== TIMEPOINT_ORDER.indexOf(id)
+          || snapshot.chainId !== context.chainId
+          || snapshot.contract.toLowerCase() !== context.torna.toLowerCase()
+          || BigInt(snapshot.blockNumber) !== point.blockNumber) {
+        throw new Error(`Resumed Testnet snapshot identity/block mismatch for ${id}.`);
+      }
+      await saveScenarioSnapshot(context, snapshot);
+      previousBlock = point.blockNumber;
+    }
+    const labelPath = resolve(LABEL_ROOT, `${config.runId}.json`);
+    const labels = await buildLabelMap(sql, config.runId);
+    await writeFile(labelPath, `${JSON.stringify(labels, null, 2)}\n`, {
+      encoding: 'utf8', flag: 'wx',
+    });
+    await finalizeLocalBundle(context);
+  } finally {
+    await sql.end();
+  }
+}
+
 /** Small receipt-confirmed t0 rehearsal; reports gas by signer before saving one t0 snapshot. */
 export async function runTestnetSmoke(config: MonadTestnetConfig): Promise<void> {
   if (config.target !== 'testnet' || config.chainId !== 10143) {
@@ -377,16 +432,27 @@ async function main(): Promise<void> {
             `Confirmed ${point.timepointId} at block ${point.blockNumber.toString()}.`));
     return;
   }
+  if (args.length === 1
+      && (args[0] === '--audit-testnet-resume' || args[0] === '--resume-testnet-bundle')) {
+    await resumeTestnetBundle(
+        loadMonadTestnetConfig(), process.env.DATABASE_URL ?? '',
+        (_context, point) => console.log(
+            `Confirmed ${point.timepointId} at block ${point.blockNumber.toString()}.`),
+        args[0] === '--audit-testnet-resume');
+    return;
+  }
   if (args.length === 1 && args[0] === '--testnet-smoke') {
     await runTestnetSmoke(loadMonadTestnetConfig());
     return;
   }
-  throw new Error('Usage: run-scenarios.ts [--plan | --t0 | --through-t5 | --through-t6 | --through-t9b | --testnet-smoke | --testnet-bundle | --execute]');
+  throw new Error('Usage: run-scenarios.ts [--plan | --t0 | --through-t5 | --through-t6 | --through-t9b | --testnet-smoke | --testnet-bundle | --audit-testnet-resume | --resume-testnet-bundle | --execute]');
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   main().catch((error: unknown) => {
-    const testnet = process.argv.includes('--testnet-bundle');
+    const testnet = process.argv.includes('--testnet-bundle')
+      || process.argv.includes('--audit-testnet-resume')
+      || process.argv.includes('--resume-testnet-bundle');
     if (testnet) {
       const name = error instanceof Error ? error.name : 'Error';
       console.error(`Testnet scenario run failed (${name}). Sensitive RPC and signing values were not printed.`);

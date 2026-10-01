@@ -139,6 +139,18 @@ gas limit. Use the t0 smoke result to measure per-signer gas before
 attempting the full ~800-transaction run. The command refuses an existing run
 directory or label file.
 
+The default failure policy remains a new deployment and run ID, as required by
+PROJECT_SPEC section 12. After an RPC interruption during t1, Minseo directed
+the `run-testnet-20261001-a` recovery on the existing deployment. This differs
+from the documented restart rule and needs team-lead review before merging.
+Its read-only `--audit-testnet-resume` path required the saved t0 snapshot,
+exactly matching ordered issue/repayment logs for every completed t1 refund,
+the original one-credit/one-retry ledger state and no pending submitter
+transaction. Only then did `--resume-testnet-bundle` continue from the next
+refund on the same deployment. These flags support this narrow t1 recovery;
+they do not make arbitrary partial snapshot regeneration safe or change the
+default PROJECT_SPEC rule.
+
 ## Explicit local configuration
 
 Local chain commands require every setting below. There is no fallback mnemonic,
