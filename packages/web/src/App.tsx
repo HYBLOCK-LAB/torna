@@ -40,6 +40,7 @@ import {
 } from './timepoints';
 import { NARRATIVE, CHIP_FIELDS, type ScreenKey as NScreen, type WatchLine, type WatchChip } from '@shared/narrative';
 import { Narrative, DeltaChips, deltasFor } from './narrative';
+import { txUrl, addressUrl } from './explorer';
 import type { ReactNode } from 'react';
 import { Donut, Gauge, Legend, Trail, type Slice } from './charts';
 import { CardholderApp, NextStep, type AppStatus } from './cardholder';
@@ -408,12 +409,12 @@ function ChainBar({ s, lang, onLang }: { s: Snapshot; lang: Lang; onLang: (lang:
         <span className="ci"><span className="ci-k">Monad Testnet</span></span>
         <span className="ci"><span className="ci-k">{t('chain.chain', lang)}</span><b className="mono">{s.chainId}</b></span>
         <span className="ci"><span className="ci-k">{t('chain.block', lang)}</span><b className="mono">{n0(s.blockNumber)}</b></span>
-        <span className="ci"><span className="ci-k">{t('chain.contract', lang)}</span><b className="mono">{short(s.contract)}</b></span>
+        <span className="ci"><span className="ci-k">{t('chain.contract', lang)}</span>
+          <b className="mono"><Hash value={s.contract} chainId={s.chainId} kind="address" /></b></span>
         <span className="ci">
           <span className="ci-k">{t('chain.lastEvent', lang)}</span>
           <b className="mono">{s.events[0]?.name ?? '—'}</b>
         </span>
-        <span className="ci"><span className="dot" />{t('chain.synced', lang)}</span>
         <span className="ci switch-note"><span>{t('chain.oneLedger', lang)}</span></span>
         <div className="seg">
           <button type="button" aria-pressed={lang === 'en'} onClick={() => onLang('en')}>{t('app.langEn', lang)}</button>
@@ -843,7 +844,7 @@ function NoteChips({ chips, s, lang }: { chips: WatchChip[]; s: Snapshot; lang: 
           if (!ev) return <b key={j} className="narr-miss">⟨tx:{c.tx}⟩</b>;
           return (
             <span key={j} className="chip tx mono">
-              <span className="hashlink">{short(ev.txHash)}</span>
+              <Hash value={ev.txHash} chainId={s.chainId} />
             </span>
           );
         }
@@ -940,14 +941,7 @@ function fieldLabel(path: string, lang: Lang): string {
 /* ── public view ─────────────────────────────────────────────── */
 
 function PublicView({ s, lang, settleSeconds, trail }: { s: Snapshot; lang: Lang; settleSeconds: number | null; trail: Array<{ id: string; value: number }> }) {
-  // The real bundle carries 748 events at timepoint 1 — a year of advances and
-  // repayments. Drawing them all is slow and unreadable, so the table shows the
-  // most recent few and says how many there are; the rest open on request.
-  const [evOpen, setEvOpen] = useState(false);
-  useEffect(() => setEvOpen(false), [s.timepointId]);
-  const EV_HEAD = 12;
-  const EV_OPEN = 100;
-  const evShown = s.events.slice(0, evOpen ? EV_OPEN : EV_HEAD);
+
   const p = s.pool;
   const m = s.metrics;
   const tvl = totalValueLocked(s);
@@ -986,7 +980,7 @@ function PublicView({ s, lang, settleSeconds, trail }: { s: Snapshot; lang: Lang
           </div>
           <div className="pubmeta">
             <span><b>Monad Testnet</b></span>
-            <span className="mono">{short(s.contract)}</span>
+            <span className="mono"><Hash value={s.contract} chainId={s.chainId} kind="address" /></span>
             <span className="mono">block {n0(s.blockNumber)}</span>
           </div>
         </div>
@@ -1187,7 +1181,7 @@ function PublicView({ s, lang, settleSeconds, trail }: { s: Snapshot; lang: Lang
               </tr>
             </thead>
             <tbody>
-              {evShown.map((e, i) => (
+              {s.events.map((e, i) => (
                 <tr key={`${e.txHash}-${i}`}>
                   <td className="mono">
                     {n0(e.blockNumber)}
@@ -1198,7 +1192,7 @@ function PublicView({ s, lang, settleSeconds, trail }: { s: Snapshot; lang: Lang
                   <td className="mono">{e.name}</td>
                   <td className="mono">{short(e.target)}</td>
                   <td className="num">{e.amount ? n0(e.amount) : '—'}</td>
-                  <td className="mono"><span className="hashlink">{short(e.txHash)}</span></td>
+                  <td className="mono"><Hash value={e.txHash} chainId={s.chainId} /></td>
                 </tr>
               ))}
               {s.events.length === 0 && (
@@ -1207,19 +1201,11 @@ function PublicView({ s, lang, settleSeconds, trail }: { s: Snapshot; lang: Lang
             </tbody>
           </table>
         </div>
-        {s.events.length > evShown.length ? (
+        {s.events.length > 0 && (
           <p className="note evmore">
-            {t('pub.evShown', lang).replace('{shown}', n0(evShown.length)).replace('{total}', n0(s.events.length))}
-            {' '}
-            <button type="button" className="linkish" onClick={() => setEvOpen(true)}>
-              {t('pub.evMore', lang)}
-            </button>
+            {t('pub.evCount', lang).replace('{total}', n0(s.events.length))}
           </p>
-        ) : s.events.length > EV_HEAD ? (
-          <p className="note evmore">
-            {t('pub.evShown', lang).replace('{shown}', n0(evShown.length)).replace('{total}', n0(s.events.length))}
-          </p>
-        ) : null}
+        )}
         <p className="note">{t('note.pastReturns', lang)}</p>
       </div>
 
@@ -1236,6 +1222,21 @@ function PublicView({ s, lang, settleSeconds, trail }: { s: Snapshot; lang: Lang
  * The smallest screen, and the one that carries the argument: a loss is not a
  * date passing, it is a ruling. Everything here is read from position state.
  */
+/**
+ * A hash, as a link to the block explorer for the chain this bundle came from.
+ * No explorer for that chain (a local run) means no link — a dead link would
+ * weaken exactly the claim this is here to support.
+ */
+function Hash({ value, chainId, kind = 'tx' }: { value: string; chainId: number; kind?: 'tx' | 'address' }) {
+  const href = kind === 'tx' ? txUrl(chainId, value) : addressUrl(chainId, value);
+  if (!href) return <span className="hashlink off">{short(value)}</span>;
+  return (
+    <a className="hashlink" href={href} target="_blank" rel="noreferrer noopener">
+      {short(value)}
+    </a>
+  );
+}
+
 /**
  * Which rows a reader should meet first. Not a severity scale — an attention
  * one: a position still waiting on something outranks one that has closed,
@@ -1610,8 +1611,6 @@ function IssuerView({ s, lang, pipe }: { s: Snapshot; lang: Lang; pipe: number }
     if (focus && s.issuers.some((i) => i.key === focus)) setPicked(focus);
   }
   const iss = s.issuers.find((i) => i.key === picked) ?? s.issuers[0];
-  const [posOpen, setPosOpen] = useState(false);
-  useEffect(() => setPosOpen(false), [s.timepointId, picked]);
 
   const PIPE = ['pipe.1', 'pipe.2', 'pipe.3', 'pipe.4', 'pipe.5'] as const;
 
@@ -1623,14 +1622,12 @@ function IssuerView({ s, lang, pipe }: { s: Snapshot; lang: Lang; pipe: number }
      scenario the rows that are still open come before the ones that closed:
      with 183 positions per issuer, "365 handled and one still awaiting a
      ruling" is only visible if that one is not 300 rows down. */
-  const allPositions = s.positions
+  const positions = s.positions
     .filter((p) => p.issuer === iss.key)
     .slice()
     .sort((a, b) =>
       b.createdAtTimepoint - a.createdAtTimepoint || stateRank(a.state) - stateRank(b.state));
-  const POS_HEAD = 12;
-  const POS_OPEN = 100;
-  const positions = allPositions.slice(0, posOpen ? POS_OPEN : POS_HEAD);
+
 
   return (
     <section className="stack" data-pane="issuer">
@@ -1778,7 +1775,7 @@ function IssuerView({ s, lang, pipe }: { s: Snapshot; lang: Lang; pipe: number }
                       </div>
                     )}
                   </td>
-                  <td className="mono"><span className="hashlink">{short(p.txHash)}</span></td>
+                  <td className="mono"><Hash value={p.txHash} chainId={s.chainId} /></td>
                 </tr>
               ))}
               {positions.length === 0 && (
@@ -1787,23 +1784,11 @@ function IssuerView({ s, lang, pipe }: { s: Snapshot; lang: Lang; pipe: number }
             </tbody>
           </table>
         </div>
-        {allPositions.length > positions.length ? (
+        {positions.length > 0 && (
           <p className="note evmore">
-            {t('iss.posShown', lang)
-              .replace('{shown}', n0(positions.length))
-              .replace('{total}', n0(allPositions.length))}
-            {' '}
-            <button type="button" className="linkish" onClick={() => setPosOpen(true)}>
-              {t('pub.evMore', lang)}
-            </button>
+            {t('iss.posCount', lang).replace('{total}', n0(positions.length))}
           </p>
-        ) : allPositions.length > POS_HEAD ? (
-          <p className="note evmore">
-            {t('iss.posShown', lang)
-              .replace('{shown}', n0(positions.length))
-              .replace('{total}', n0(allPositions.length))}
-          </p>
-        ) : null}
+        )}
       </div>
     </section>
   );

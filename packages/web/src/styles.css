@@ -780,15 +780,8 @@ select{font:inherit;font-size:13px;padding:6px 10px;border-radius:3px;
   .wgo:active{transform:none}
 }
 
-/* 이벤트 표의 「최근 N건 · 더 보기」 줄. 실제 번들은 시점 1에만 748건이라
-   전부 그리면 느리고 읽히지도 않는다. 셈은 밝히고 나머지는 접어 둔다. */
+/* 긴 표 아래의 셈 줄. 몇 건을 보고 있는지, 어디서 스크롤되는지 알려준다. */
 .note.evmore{border-color:var(--line-2);color:var(--ink-3);margin-bottom:8px}
-.linkish{
-  background:none;border:0;padding:0;font:inherit;color:var(--violet);
-  font-weight:600;cursor:pointer;border-bottom:1px dashed var(--line-2);
-}
-.linkish:hover{border-bottom-color:var(--violet)}
-.linkish:focus-visible{outline:2px solid var(--violet);outline-offset:2px}
 
 /* 긴 표는 패널 높이를 늘리지 않고 자기 안에서 스크롤한다.
    실제 번들은 포지션이 발급사당 183건, 시점 1의 이벤트가 748건이라
@@ -800,3 +793,11 @@ select{font:inherit;font-size:13px;padding:6px 10px;border-radius:3px;
   padding-top:6px;box-shadow:0 1px 0 var(--line-2);
 }
 @media (max-width:720px){.scroll.tall{max-height:300px}}
+
+/* 해시는 이제 링크다 — 실제 체인으로 나가는 유일한 출구라 눌러볼 수 있게 보인다.
+   익스플로러가 없는 체인(로컬 실행)에서는 링크가 아니라 글자로만 남는다. */
+a.hashlink{cursor:pointer}
+a.hashlink:hover{border-bottom-style:solid;border-bottom-color:var(--violet)}
+a.hashlink:focus-visible{outline:2px solid var(--violet);outline-offset:2px;border-radius:2px}
+a.hashlink::after{content:"↗";font-size:.8em;margin-left:3px;opacity:.55}
+.hashlink.off{color:var(--ink-3);border-bottom-style:dotted}
