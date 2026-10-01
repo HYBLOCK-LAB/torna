@@ -1177,7 +1177,7 @@ function PublicView({ s, lang, settleSeconds, trail }: { s: Snapshot; lang: Lang
       <div className="panel" id="p-pub-ev">
         <h3>{t('panel.events', lang)}</h3>
         <p className="hint">{t('hint.events', lang)}</p>
-        <div className="scroll">
+        <div className="scroll tall">
           <table>
             <thead>
               <tr>
@@ -1236,6 +1236,19 @@ function PublicView({ s, lang, settleSeconds, trail }: { s: Snapshot; lang: Lang
  * The smallest screen, and the one that carries the argument: a loss is not a
  * date passing, it is a ruling. Everything here is read from position state.
  */
+/**
+ * Which rows a reader should meet first. Not a severity scale — an attention
+ * one: a position still waiting on something outranks one that has closed,
+ * because the closed ones are the background and the open one is the story.
+ */
+const STATE_RANK: Record<string, number> = {
+  Overdue: 0, Review: 1, CapHeld: 2, CoveredLoss: 3, RecoveryRecorded: 4,
+  Advanced: 5, Registered: 6, Repaid: 7,
+};
+function stateRank(state: string): number {
+  return STATE_RANK[state] ?? 9;
+}
+
 function VerifierView({ s, lang }: { s: Snapshot; lang: Lang }) {
   const pending = s.positions
     .filter((p) => p.state === 'Review' || p.state === 'CoveredLoss' || p.state === 'CapHeld')
@@ -1597,18 +1610,27 @@ function IssuerView({ s, lang, pipe }: { s: Snapshot; lang: Lang; pipe: number }
     if (focus && s.issuers.some((i) => i.key === focus)) setPicked(focus);
   }
   const iss = s.issuers.find((i) => i.key === picked) ?? s.issuers[0];
+  const [posOpen, setPosOpen] = useState(false);
+  useEffect(() => setPosOpen(false), [s.timepointId, picked]);
 
   const PIPE = ['pipe.1', 'pipe.2', 'pipe.3', 'pipe.4', 'pipe.5'] as const;
 
   if (!iss) return <Placeholder screen="issuer" lang={lang} />;
 
   const { required, usagePct, headroom, free } = issuerMargin(iss);
-  /* Newest scenario first. A position table read top-down should start with
-     what just happened — the year's old rows are context, not the news. */
-  const positions = s.positions
+  /* Newest scenario first — a table read top-down should start with what just
+     happened; the year's old rows are context, not the news. Within one
+     scenario the rows that are still open come before the ones that closed:
+     with 183 positions per issuer, "365 handled and one still awaiting a
+     ruling" is only visible if that one is not 300 rows down. */
+  const allPositions = s.positions
     .filter((p) => p.issuer === iss.key)
     .slice()
-    .sort((a, b) => b.createdAtTimepoint - a.createdAtTimepoint);
+    .sort((a, b) =>
+      b.createdAtTimepoint - a.createdAtTimepoint || stateRank(a.state) - stateRank(b.state));
+  const POS_HEAD = 12;
+  const POS_OPEN = 100;
+  const positions = allPositions.slice(0, posOpen ? POS_OPEN : POS_HEAD);
 
   return (
     <section className="stack" data-pane="issuer">
@@ -1721,7 +1743,7 @@ function IssuerView({ s, lang, pipe }: { s: Snapshot; lang: Lang; pipe: number }
 
       <div className="panel" id="p-iss-pos">
         <h3>{t('panel.positions', lang)}</h3>
-        <div className="scroll">
+        <div className="scroll tall">
           <table>
             <thead>
               <tr>
@@ -1765,6 +1787,23 @@ function IssuerView({ s, lang, pipe }: { s: Snapshot; lang: Lang; pipe: number }
             </tbody>
           </table>
         </div>
+        {allPositions.length > positions.length ? (
+          <p className="note evmore">
+            {t('iss.posShown', lang)
+              .replace('{shown}', n0(positions.length))
+              .replace('{total}', n0(allPositions.length))}
+            {' '}
+            <button type="button" className="linkish" onClick={() => setPosOpen(true)}>
+              {t('pub.evMore', lang)}
+            </button>
+          </p>
+        ) : allPositions.length > POS_HEAD ? (
+          <p className="note evmore">
+            {t('iss.posShown', lang)
+              .replace('{shown}', n0(positions.length))
+              .replace('{total}', n0(allPositions.length))}
+          </p>
+        ) : null}
       </div>
     </section>
   );

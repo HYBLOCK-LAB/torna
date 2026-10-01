@@ -789,3 +789,14 @@ select{font:inherit;font-size:13px;padding:6px 10px;border-radius:3px;
 }
 .linkish:hover{border-bottom-color:var(--violet)}
 .linkish:focus-visible{outline:2px solid var(--violet);outline-offset:2px}
+
+/* 긴 표는 패널 높이를 늘리지 않고 자기 안에서 스크롤한다.
+   실제 번들은 포지션이 발급사당 183건, 시점 1의 이벤트가 748건이라
+   그대로 흘리면 패널 하나가 화면을 몇 번이고 넘어간다.
+   머리행은 붙여 두어야 스크롤 중에도 어느 칸인지 알 수 있다. */
+.scroll.tall{max-height:360px;overflow-y:auto}
+.scroll.tall thead th{
+  position:sticky;top:0;background:var(--surface);
+  padding-top:6px;box-shadow:0 1px 0 var(--line-2);
+}
+@media (max-width:720px){.scroll.tall{max-height:300px}}

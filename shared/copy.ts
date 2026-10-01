@@ -313,6 +313,8 @@ export const COPY = {
   'pub.evShown':        { en: 'Showing the latest {shown} of {total} events at this timepoint.',
                           ko: '이 시점까지 누적 {total}건 중 최근 {shown}건을 보여줍니다.' },
   'pub.evMore':         { en: 'Show more', ko: '더 보기' },
+  'iss.posShown':       { en: 'Showing {shown} of {total} positions — still open first, then newest.',
+                          ko: '포지션 {total}건 중 {shown}건을 보여줍니다 — 아직 열려 있는 건이 먼저입니다.' },
   'val.empty':          { en: 'Nothing is awaiting a ruling. Run the delay or loss timepoint and the case arrives here.',
                           ko: '판정 대기 건이 없습니다. 지연 또는 손실 시나리오를 실행하면 이 화면으로 넘어옵니다.' },
   'val.note':           { en: 'The ruling sits with the verifiers, not the issuer. A loss is a ruling, never the passing of a date — that separation is what keeps an issuer from writing off its own exposure.',
