@@ -53,6 +53,16 @@ const STEPS: Record<Mode, Array<[CopyKey, CopyKey]>> = {
 };
 
 export interface Chip { k: CopyKey; a?: string | number | null; b: string | number; up?: boolean; dn?: boolean }
+
+/**
+ * Chips the cardholder could never see on their own screen. They stay in the
+ * log — the whole argument of this demo is the gap between what the user goes
+ * through and what it costs behind them — but they are grouped and labelled
+ * apart, so nobody mistakes a pool balance for something the app showed.
+ */
+const BEHIND: ReadonlySet<CopyKey> = new Set<CopyKey>([
+  'ulog.k.poolCash', 'ulog.k.fee', 'ulog.k.advanced', 'ulog.k.trigger',
+]);
 export interface LogLine { id: number; text: CopyKey; chips: Chip[] }
 export interface FeedItem { key: string; title: CopyKey; sub: CopyKey; value: string; plus?: boolean }
 
@@ -325,20 +335,29 @@ export function CardholderApp({
                 <h3>{t('app.justHappenedTitle', lang)}</h3>
                 <p className="hint">{t('hint.justHappened', lang)}</p>
                 <ul className="rbl chg">
-                  {log.map((l) => (
-                    <li key={l.id}>
-                      {t(l.text, lang)}
-                      <span className="deltas">
-                        {l.chips.map((c, i) => (
-                          <span key={i} className={`chip${c.up ? ' up' : c.dn ? ' dn' : ''}`}>
-                            {t(c.k, lang)}{' '}
-                            {c.a !== undefined && c.a !== null && <><b>{fmt(c.a)}</b><span className="ar">→</span></>}
-                            <b>{fmt(c.b)}</b>
-                          </span>
-                        ))}
+                  {log.map((l) => {
+                    const chip = (c: Chip, i: number) => (
+                      <span key={i} className={`chip${c.up ? ' up' : c.dn ? ' dn' : ''}`}>
+                        {t(c.k, lang)}{' '}
+                        {c.a !== undefined && c.a !== null && <><b>{fmt(c.a)}</b><span className="ar">→</span></>}
+                        <b>{fmt(c.b)}</b>
                       </span>
-                    </li>
-                  ))}
+                    );
+                    const onCard = l.chips.filter((c) => !BEHIND.has(c.k));
+                    const behind = l.chips.filter((c) => BEHIND.has(c.k));
+                    return (
+                      <li key={l.id}>
+                        {t(l.text, lang)}
+                        {onCard.length > 0 && <span className="deltas">{onCard.map(chip)}</span>}
+                        {behind.length > 0 && (
+                          <span className="deltas behind">
+                            <span className="behind-k">{t('ulog.behind', lang)}</span>
+                            {behind.map(chip)}
+                          </span>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             )}

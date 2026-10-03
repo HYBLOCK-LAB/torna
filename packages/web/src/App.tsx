@@ -41,6 +41,7 @@ import {
 import { NARRATIVE, CHIP_FIELDS, type ScreenKey as NScreen, type WatchLine, type WatchChip } from '@shared/narrative';
 import { Narrative, DeltaChips, deltasFor } from './narrative';
 import { txUrl, addressUrl } from './explorer';
+import { fetchHead, hasRpc, type LiveHead } from './live';
 import type { ReactNode } from 'react';
 import { Donut, Gauge, Legend, Trail, type Slice } from './charts';
 import { CardholderApp, NextStep, type AppStatus } from './cardholder';
@@ -403,6 +404,20 @@ function Rich({ text }: { text: string }) {
 /* ── on-chain status bar ─────────────────────────────────────── */
 
 function ChainBar({ s, lang, onLang }: { s: Snapshot; lang: Lang; onLang: (lang: Lang) => void }) {
+  /* One question to the chain, once per page load. See live.ts for why this
+     is the only part of the demo that needs a network. */
+  const [head, setHead] = useState<LiveHead>(() => (hasRpc(s.chainId) ? { state: 'asking' } : { state: 'off' }));
+  useEffect(() => {
+    if (!hasRpc(s.chainId)) { setHead({ state: 'off' }); return; }
+    let alive = true;
+    fetchHead(s.chainId).then((block) => {
+      if (!alive) return;
+      setHead(block === null ? { state: 'failed' } : { state: 'ok', block });
+    });
+    return () => { alive = false; };
+    // The chain does not change while the page is open; the bundle is one run.
+  }, [s.chainId]);
+
   return (
     <div className="chain">
       <div className="wrap">
@@ -415,6 +430,13 @@ function ChainBar({ s, lang, onLang }: { s: Snapshot; lang: Lang; onLang: (lang:
           <span className="ci-k">{t('chain.lastEvent', lang)}</span>
           <b className="mono">{s.events[0]?.name ?? '—'}</b>
         </span>
+        {head.state === 'ok' && (
+          <span className="ci live">
+            <span className="dot" />
+            <span className="ci-k">{t('chain.liveHead', lang)}</span>
+            <b className="mono">{n0(head.block)}</b>
+          </span>
+        )}
         <span className="ci switch-note"><span>{t('chain.oneLedger', lang)}</span></span>
         <div className="seg">
           <button type="button" aria-pressed={lang === 'en'} onClick={() => onLang('en')}>{t('app.langEn', lang)}</button>

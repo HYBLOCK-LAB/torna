@@ -26,8 +26,8 @@ export const COPY = {
                       ko: '환불 선지급 콘솔' },
   'app.lede':       { en: 'A shared pool advances confirmed refunds to card issuers, so spending power is restored in seconds.',
                       ko: '확정된 환불금을 공동 풀이 카드사에 선지급해 구매력을 즉시 복원합니다.' },
-  'app.mockNotice': { en: 'Design mockup. Figures are demo assumptions, not real transactions.',
-                      ko: '설계용 목업. 수치는 데모 가정이며 실제 거래가 아닙니다.' },
+  'app.mockNotice': { en: 'The cardholder app is a design mockup of a fictional issuer. Every screen behind it replays a real Monad Testnet run — 806 on-chain events, every hash clickable.',
+                      ko: '카드 앱은 가상 발급사의 설계 목업입니다. 그 뒤의 모든 화면은 Monad 테스트넷 실제 실행을 재생합니다 — 온체인 이벤트 806건, 모든 해시가 익스플로러로 연결됩니다.' },
   'app.langEn':     { en: 'EN', ko: 'EN' },
   'app.langKo':     { en: '한',  ko: '한' },
 
@@ -201,8 +201,8 @@ export const COPY = {
                           ko: '카드 환불 선지급 공동 풀 · 공개 현황' },
   'hint.cardholder':    { en: 'A card app from a fictional issuer. No wallet, no USDC, no gas appears anywhere, and the currency shown is always USD.',
                           ko: '가상 발급사의 카드 앱입니다. 지갑·USDC·가스비는 어디에도 나타나지 않고, 표시 통화는 항상 USD입니다.' },
-  'hint.justHappened':  { en: 'Only changes visible on the cardholder screen are recorded here.',
-                          ko: '사용자 화면에서 일어난 변화만 기록합니다.' },
+  'hint.justHappened':  { en: 'What the cardholder saw, and what moved behind it.',
+                          ko: '카드 화면에서 본 것과, 그 뒤에서 움직인 것.' },
   'note.pastReturns':   { en: 'Returns shown are realised history and do not guarantee future performance. Liquidity provision is open to institutions.',
                           ko: '표시된 수익률은 과거 실현 수치이며 미래 수익을 보장하지 않습니다. 유동성 공급 참여는 기관을 대상으로 합니다.' },
 
@@ -598,6 +598,7 @@ export const COPY = {
   'ulog.k.needed':   { en: 'Needed',         ko: '필요' },
   'ulog.k.short':    { en: 'Short by',       ko: '부족' },
   'ulog.k.waited':   { en: 'Days waited',    ko: '기다린 날짜' },
+  'ulog.behind':     { en: 'Behind it',      ko: '그 뒤에서' },
   'ulog.v.none':     { en: 'none',           ko: '없음' },
   'ulog.v.inDays':   { en: 'in 3–5 business days', ko: '영업일 3~5일 뒤' },
 
@@ -696,6 +697,7 @@ export const COPY = {
   'chain.block':      { en: 'block',                  ko: 'block' },
   'chain.contract':   { en: 'contract',               ko: 'contract' },
   'chain.lastEvent':  { en: 'Last event',             ko: '최근 이벤트' },
+  'chain.liveHead':   { en: 'live head',  ko: '현재 블록' },
   'chain.oneLedger':  { en: 'All five screens read this one ledger', ko: '다섯 화면이 이 원장을 봅니다' },
   'iss.rampUp':       { en: 'ramp-up',                ko: '램프업' },
   'foot.fiction':     { en: 'HYBRID Travel Card (North America · Europe, acquirer α) and AURA Travel Card (Asia, acquirer β) are invented companies. So are the hotels, the merchants and every figure on these screens.',

@@ -801,3 +801,26 @@ a.hashlink:hover{border-bottom-style:solid;border-bottom-color:var(--violet)}
 a.hashlink:focus-visible{outline:2px solid var(--violet);outline-offset:2px;border-radius:2px}
 a.hashlink::after{content:"↗";font-size:.8em;margin-left:3px;opacity:.55}
 .hashlink.off{color:var(--ink-3);border-bottom-style:dotted}
+
+/* 체인에 직접 물어본 값. 옆의 BLOCK은 이 시점이 찍힌 블록(스냅샷)이고,
+   이쪽은 페이지를 열 때 테스트넷이 답한 현재 높이다. 못 받으면 아예 안 뜬다. */
+.ci.live{color:var(--ok)}
+.ci.live .ci-k{color:var(--ok)}
+.ci.live b{color:var(--ok)}
+.ci.live .dot{
+  width:6px;height:6px;border-radius:50%;background:var(--ok);
+  display:inline-block;margin-right:5px;
+}
+
+/* 카드 체험의 기록은 시점이 둘이다. 윗줄은 사용자가 화면에서 본 것,
+   아랫줄은 같은 순간 뒤에서 움직인 것. 섞어 놓으면 풀 잔액을 앱이 보여준 줄
+   안다. 숨기지 않고 가른다 — 이 데모의 논지가 바로 그 대비이기 때문이다. */
+.deltas.behind{
+  margin-top:5px;padding-left:10px;
+  border-left:2px solid var(--line-2);align-items:center;
+}
+.deltas.behind .behind-k{
+  font-size:10px;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--ink-3);font-weight:600;margin-right:2px;
+}
+.deltas.behind .chip{opacity:.9}
