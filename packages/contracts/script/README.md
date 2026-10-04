@@ -142,7 +142,8 @@ directory or label file.
 The default failure policy remains a new deployment and run ID, as required by
 PROJECT_SPEC section 12. After an RPC interruption during t1, Minseo directed
 the `run-testnet-20261001-a` recovery on the existing deployment. This differs
-from the documented restart rule and needs team-lead review before merging.
+from the documented restart rule; it was accepted as a one-off exception for
+this run only (DECISIONS.md D17, 2026-10-04).
 Its read-only `--audit-testnet-resume` path required the saved t0 snapshot,
 exactly matching ordered issue/repayment logs for every completed t1 refund,
 the original one-credit/one-retry ledger state and no pending submitter
