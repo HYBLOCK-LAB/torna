@@ -496,8 +496,8 @@ h1,h2,.panel>h3,.bs-t,.card-face .bv,.pubhead h3{
 .pband b{color:var(--ink);font-weight:700}
 /* 브리핑: 대시보드 패널보다 한 층 위 — 화면에서 유일하게 그림자를 가진 요소 */
 .pnote,.pnote.pn-lp,.pnote.pn-val,.pnote.pn-pub,.pnote.pn-issuer{
-  position:sticky;top:46px;z-index:20;scroll-margin-top:56px;
-  max-height:calc(100vh - 72px);overflow-y:auto;overscroll-behavior:contain;
+  /* 스크롤을 따라오지 않는다 — 대시보드 위에 떠 있으면 수치를 가렸다. */
+  position:relative;scroll-margin-top:56px;
   background:var(--surface)!important;color:var(--ink)!important;
   border:1px solid var(--line);border-left:3px solid var(--violet)!important;
   border-radius:3px;padding:15px 18px;margin-bottom:16px;

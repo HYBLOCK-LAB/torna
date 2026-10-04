@@ -26,8 +26,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  snapshots, timepointIds, manifest, assertBundleIntegrity,
-  issuerRegion, refundLabel, acquirerLabel, acquirerId, cardholderRun,
+  snapshots, timepointIds, assertBundleIntegrity,
+  issuerRegion, refundLabel, acquirerLabel, acquirerId,
 } from './bundle';
 import { t, tp, type CopyKey, type Lang } from '@shared/copy';
 import { PARAMS } from '@shared/params';
@@ -1064,18 +1064,6 @@ function PublicView({ s, lang, trail }: { s: Snapshot; lang: Lang; trail: Array<
             k={t('tile.rejected', lang)} v={n0(m.rejectedRequests)}
             tone={m.rejectedRequests ? 'warn' : undefined}
           />
-          {/* The cardholder walkthrough's own advance, as a transaction a judge
-              can open. No latency figure: the run did not time the path from
-              refund message to balance, so the page does not claim one. */}
-          {cardholderRun?.advanceTx && (
-            <div className="tile txt">
-              <div className="k">{t('tile.cardholderAdvance', lang)}</div>
-              <div className="v">
-                <Hash value={cardholderRun.advanceTx} chainId={cardholderRun.chainId} />
-                <small>{t('tile.cardholderAdvanceSub', lang)}</small>
-              </div>
-            </div>
-          )}
         </div>
 
         <p className="sec-k">{t('sec.roomToJoin', lang)}<span>{t('sec.roomToJoinSub', lang)}</span></p>
@@ -1236,9 +1224,6 @@ function PublicView({ s, lang, trail }: { s: Snapshot; lang: Lang; trail: Array<
         <p className="note">{t('note.pastReturns', lang)}</p>
       </div>
 
-      <p className="hint mono">
-        run {manifest?.runId} · {s.timepointId} · {s.capturedAt}
-      </p>
     </section>
   );
 }
@@ -1844,12 +1829,20 @@ function PositionState({ state, lang }: { state: PositionStateT; lang: Lang }) {
  * Which scenario a row came from. Seq 0 is not a scenario — it is the
  * cardholder run the viewer just did, and saying "S0" would invent one.
  */
+/* `createdAtTimepoint` is the snapshot's sequence index (t3b is 4, t4 is 5),
+   not the scenario number. Printing it as S{n} shifted every chip after 3b by
+   one or two, so map it back to the timepoint id before labelling. */
+const TP_BY_SEQ: Record<number, TimepointId> = Object.fromEntries(
+  timepointIds.map((id) => [snapshots[id].seq, id]),
+);
+
 function ScenChip({ seq, lang }: { seq: number; lang: Lang }) {
-  return (
-    <span className="scchip">
-      {seq === 0 ? t('scen.chipRun', lang) : t('scen.chip', lang).replace('{n}', String(seq))}
-    </span>
-  );
+  const id = TP_BY_SEQ[seq];
+  if (seq === 0 || id === 't0') {
+    return <span className="scchip">{t('scen.chipRun', lang)}</span>;
+  }
+  const n = id ? id.slice(1) : String(seq);
+  return <span className="scchip">{t('scen.chip', lang).replace('{n}', n)}</span>;
 }
 
 function Tile({ k, v, u, tone, text }: {

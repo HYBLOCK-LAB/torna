@@ -268,8 +268,6 @@ export const COPY = {
   'tile.refundCount':   { en: 'Refunds',             ko: '누적 건수' },
   'tile.repayRate':     { en: 'Repayment rate',      ko: '정상 상환률' },
   'tile.rejected':      { en: 'Requests rejected',   ko: '요청 거절' },
-  'tile.cardholderAdvance':    { en: 'Cardholder refund advance', ko: '사용자 환불 선지급' },
-  'tile.cardholderAdvanceSub': { en: 'REF-2026-001 · Monad Testnet', ko: 'REF-2026-001 · Monad Testnet' },
   'tile.lossConfirmed': { en: 'Confirmed loss',      ko: '확정 손실' },
   'tile.lossRate':      { en: 'Loss rate',           ko: '손실률' },
   'tile.breakeven':     { en: 'break-even {param.breakEvenPct}%', ko: '손익분기 {param.breakEvenPct}%' },
