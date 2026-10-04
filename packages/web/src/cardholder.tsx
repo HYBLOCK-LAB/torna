@@ -24,6 +24,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { t, type CopyKey, type Lang } from '@shared/copy';
 import { ART, Card, CardMini, PhoneFrame, StayCard } from './phone';
+import { cardholderRun } from './bundle';
+import { txUrl } from './explorer';
 
 export type Step =
   | 'home' | 'cancelled' | 'processing' | 'restored'
@@ -52,7 +54,11 @@ const STEPS: Record<Mode, Array<[CopyKey, CopyKey]>> = {
   ],
 };
 
-export interface Chip { k: CopyKey; a?: string | number | null; b: string | number; up?: boolean; dn?: boolean }
+export interface Chip {
+  k: CopyKey; a?: string | number | null; b: string | number; up?: boolean; dn?: boolean;
+  /** A transaction hash. The chip renders as a link to the block explorer. */
+  tx?: string;
+}
 
 /**
  * Chips the cardholder could never see on their own screen. They stay in the
@@ -61,8 +67,27 @@ export interface Chip { k: CopyKey; a?: string | number | null; b: string | numb
  * apart, so nobody mistakes a pool balance for something the app showed.
  */
 const BEHIND: ReadonlySet<CopyKey> = new Set<CopyKey>([
-  'ulog.k.poolCash', 'ulog.k.fee', 'ulog.k.advanced', 'ulog.k.trigger',
+  'ulog.k.poolCash', 'ulog.k.fee', 'ulog.k.advanced', 'ulog.k.trigger', 'ulog.k.tx',
 ]);
+
+/**
+ * What happened behind the cardholder, read from the t0 run rather than typed
+ * in: pool cash, the fee, and the two Monad Testnet transactions.
+ */
+const RUN = cardholderRun;
+const shortHash = (h: string) => `${h.slice(0, 6)}…${h.slice(-4)}`;
+const txChip = (hash: string | null | undefined): Chip[] =>
+  hash ? [{ k: 'ulog.k.tx', b: shortHash(hash), tx: hash }] : [];
+const restoredBehind = (): Chip[] => RUN ? [
+  { k: 'ulog.k.poolCash', a: RUN.poolCashBefore, b: RUN.poolCashAdvanced, dn: true },
+  { k: 'ulog.k.fee', b: RUN.fee },
+  ...txChip(RUN.advanceTx),
+] : [];
+const repaidBehind = (): Chip[] => RUN ? [
+  { k: 'ulog.k.poolCash', a: RUN.poolCashAdvanced, b: RUN.poolCashRepaid, up: true },
+  { k: 'ulog.k.advanced', a: REFUND, b: 0, dn: true },
+  ...txChip(RUN.repayTx),
+] : [{ k: 'ulog.k.advanced', a: REFUND, b: 0, dn: true }];
 export interface LogLine { id: number; text: CopyKey; chips: Chip[] }
 export interface FeedItem { key: string; title: CopyKey; sub: CopyKey; value: string; plus?: boolean }
 
@@ -73,8 +98,6 @@ export interface AppStatus {
   finished: boolean;
   /** 0-5. The issuer console draws the same stages from this. */
   pipe: number;
-  /** Seconds from refund confirmation to a spendable balance, once measured. */
-  settleSeconds: number | null;
   /** True once T+5 settlement has repaid the pool. */
   repaid: boolean;
 }
@@ -96,7 +119,6 @@ export function CardholderApp({
   const [feed, setFeed] = useState<FeedItem[]>([]);
   const [log, setLog] = useState<LogLine[]>([]);
   const [touched, setTouched] = useState(false);
-  const [settleSeconds, setSettleSeconds] = useState<number | null>(null);
   const [repaid, setRepaid] = useState(false);
   const timers = useRef<number[]>([]);
 
@@ -104,8 +126,8 @@ export function CardholderApp({
   useEffect(() => clearTimers, []);
 
   useEffect(() => {
-    onStatus({ mode, step, finished: step === 'done', pipe, settleSeconds, repaid });
-  }, [mode, step, pipe, settleSeconds, repaid, onStatus]);
+    onStatus({ mode, step, finished: step === 'done', pipe, repaid });
+  }, [mode, step, pipe, repaid, onStatus]);
   useEffect(() => { if (step === 'done') onFinished(); }, [step, onFinished]);
 
   const say = (text: CopyKey, chips: Chip[]) =>
@@ -115,7 +137,7 @@ export function CardholderApp({
     clearTimers();
     setMode(m); setStep('home'); setBalance(START); setPipe(0);
     setFeed([]); setLog([]); setTouched(false);
-    setSettleSeconds(null); setRepaid(false);
+    setRepaid(false);
   };
 
   /* The advance runs by itself. No button starts it — that is the claim. */
@@ -128,16 +150,13 @@ export function CardholderApp({
     }
     const id = window.setTimeout(() => {
       setBalance(START + REFUND);
-      // The demo's speed claim, measured rather than asserted.
-      setSettleSeconds(Number((1.4 + Math.random() * 0.6).toFixed(1)));
       setFeed((f) => [
         { key: 'r', title: 'app.feedRefund', sub: 'app.feedRefundSub',
           value: `+${REFUND.toLocaleString('en-US')}`, plus: true }, ...f,
       ]);
       say('ulog.restored', [
         { k: 'ulog.k.balance', a: START, b: START + REFUND, up: true },
-        { k: 'ulog.k.poolCash', a: 9500, b: 8500, dn: true },
-        { k: 'ulog.k.fee', b: 3 },
+        ...restoredBehind(),
       ]);
       setStep('restored');
     }, 380);
@@ -186,10 +205,7 @@ export function CardholderApp({
     setStep('done');
     const id = window.setTimeout(() => {
       setRepaid(true);
-      say('ulog.repaid', [
-        { k: 'ulog.k.poolCash', a: 8500, b: 9500, up: true },
-        { k: 'ulog.k.advanced', a: REFUND, b: 0, dn: true },
-      ]);
+      say('ulog.repaid', repaidBehind());
     }, 1100);
     timers.current.push(id);
   };
@@ -248,10 +264,7 @@ export function CardholderApp({
     // Without this beat the demo shows money going out and never coming back.
     const id = window.setTimeout(() => {
       setRepaid(true);
-      say('ulog.repaid', [
-        { k: 'ulog.k.poolCash', a: 8500, b: 9500, up: true },
-        { k: 'ulog.k.advanced', a: REFUND, b: 0, dn: true },
-      ]);
+      say('ulog.repaid', repaidBehind());
     }, 1100);
     timers.current.push(id);
   }, [balance]);
@@ -340,7 +353,10 @@ export function CardholderApp({
                       <span key={i} className={`chip${c.up ? ' up' : c.dn ? ' dn' : ''}`}>
                         {t(c.k, lang)}{' '}
                         {c.a !== undefined && c.a !== null && <><b>{fmt(c.a)}</b><span className="ar">→</span></>}
-                        <b>{fmt(c.b)}</b>
+                        {c.tx && txUrl(RUN?.chainId ?? 0, c.tx)
+                          ? <a className="hashlink" href={txUrl(RUN?.chainId ?? 0, c.tx)!}
+                               target="_blank" rel="noreferrer noopener"><b>{fmt(c.b)}</b></a>
+                          : <b>{fmt(c.b)}</b>}
                       </span>
                     );
                     const onCard = l.chips.filter((c) => !BEHIND.has(c.k));

@@ -103,3 +103,52 @@ export function issuerRegion(issuerKey: string): string {
 const short = (h: string) => `${h.slice(0, 6)}…${h.slice(-4)}`;
 
 export const timepointIds = TIMEPOINT_ORDER;
+
+/**
+ * The cardholder walkthrough, as it actually ran on chain.
+ *
+ * The phone tab is a local state machine — it has to be, so a visitor can
+ * replay it as often as they like without touching the bundle. But the
+ * figures it prints behind the cardholder, and the transactions it points
+ * at, are the ones t0 recorded: REF-2026-001 was advanced and repaid on
+ * Monad Testnet, and these are those two transactions. Nothing here is
+ * typed in by hand, so a re-run of the bundle cannot leave the phone behind.
+ *
+ * Pool cash is the LP side only (`cashAvailable`); the protocol reserve is
+ * held apart and never counted in it.
+ */
+export interface CardholderRun {
+  chainId: number;
+  advanceTx: string | null;
+  advanceBlock: number | null;
+  repayTx: string | null;
+  /** LP cash before the advance: the deposits, nothing earned yet. */
+  poolCashBefore: number;
+  /** After 1,000 went out and the LP share of the fee came in. */
+  poolCashAdvanced: number;
+  /** After T+5 repayment — t0's recorded figure. */
+  poolCashRepaid: number;
+  /** The whole fee the issuer paid: LP + reserve + protocol shares. */
+  fee: number;
+}
+
+export const cardholderRun: CardholderRun | null = (() => {
+  const s = snapshots.t0;
+  if (!s) return null;
+  const ev = (name: string) => s.events.find((e) => e.name === name) ?? null;
+  const advanced = ev('AdvanceIssued');
+  const repaid = ev('AdvanceRepaid');
+  const seeded = ev('ReserveSeeded')?.amount ?? 0;
+  const principal = advanced?.amount ?? 0;
+  const round = (n: number) => Math.round(n * 1e6) / 1e6;
+  return {
+    chainId: s.chainId,
+    advanceTx: advanced?.txHash ?? null,
+    advanceBlock: advanced?.blockNumber ?? null,
+    repayTx: repaid?.txHash ?? null,
+    poolCashBefore: round(s.pool.cashAvailable - s.pool.lpFeeAccrued),
+    poolCashAdvanced: round(s.pool.cashAvailable - principal),
+    poolCashRepaid: s.pool.cashAvailable,
+    fee: round(s.pool.lpFeeAccrued + s.pool.protocolFee + (s.pool.reserve - seeded)),
+  };
+})();

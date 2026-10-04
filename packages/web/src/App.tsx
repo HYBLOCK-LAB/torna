@@ -27,7 +27,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   snapshots, timepointIds, manifest, assertBundleIntegrity,
-  issuerRegion, refundLabel, acquirerLabel, acquirerId,
+  issuerRegion, refundLabel, acquirerLabel, acquirerId, cardholderRun,
 } from './bundle';
 import { t, tp, type CopyKey, type Lang } from '@shared/copy';
 import { PARAMS } from '@shared/params';
@@ -98,7 +98,7 @@ export default function App() {
   const [done, setDone] = useState<Set<TimepointId>>(new Set());
   const [briefOpen, setBriefOpen] = useState(true);
   const [intro, setIntro] = useState(true);
-  const [appStatus, setAppStatus] = useState<AppStatus>({ mode: 'off', step: 'home', finished: false, pipe: 0, settleSeconds: null, repaid: false });
+  const [appStatus, setAppStatus] = useState<AppStatus>({ mode: 'off', step: 'home', finished: false, pipe: 0, repaid: false });
   /** Screens with something new to see since the cardholder run finished. */
   const [dirty, setDirty] = useState<Set<ScreenKey>>(new Set());
   /**
@@ -178,7 +178,7 @@ export default function App() {
   const resetAll = () => {
     setReviewed(new Set()); setDone(new Set()); setSeen(new Set()); setDirty(new Set());
     setPending(null); setLastOps('issuer');
-    setAppStatus({ mode: 'off', step: 'home', finished: false, pipe: 0, settleSeconds: null, repaid: false });
+    setAppStatus({ mode: 'off', step: 'home', finished: false, pipe: 0, repaid: false });
     setRunKey((k) => k + 1);
     setCurrent('t0'); setScreen('user'); setBriefOpen(true); setNoteOpen(true);
   };
@@ -357,7 +357,7 @@ export default function App() {
                 />
               </>
             )
-              : screen === 'pub' ? <PublicView s={s} lang={lang} settleSeconds={appStatus.settleSeconds} trail={trail} />
+              : screen === 'pub' ? <PublicView s={s} lang={lang} trail={trail} />
               : screen === 'lp' ? <LpView s={s} lang={lang} />
               : screen === 'issuer' ? <IssuerView s={s} lang={lang} pipe={appStatus.pipe} />
               : screen === 'val' ? <VerifierView s={s} lang={lang} />
@@ -962,7 +962,7 @@ function fieldLabel(path: string, lang: Lang): string {
 
 /* ── public view ─────────────────────────────────────────────── */
 
-function PublicView({ s, lang, settleSeconds, trail }: { s: Snapshot; lang: Lang; settleSeconds: number | null; trail: Array<{ id: string; value: number }> }) {
+function PublicView({ s, lang, trail }: { s: Snapshot; lang: Lang; trail: Array<{ id: string; value: number }> }) {
 
   const p = s.pool;
   const m = s.metrics;
@@ -1064,13 +1064,18 @@ function PublicView({ s, lang, settleSeconds, trail }: { s: Snapshot; lang: Lang
             k={t('tile.rejected', lang)} v={n0(m.rejectedRequests)}
             tone={m.rejectedRequests ? 'warn' : undefined}
           />
-          {/* The latency the cardholder run just produced, carried through to
-              the public dashboard. It is the demo's headline number. */}
-          <Tile
-            k={t('tile.settleToSpend', lang)}
-            v={settleSeconds !== null ? `${settleSeconds}s` : '—'}
-            u={t('tile.lastOne', lang)}
-          />
+          {/* The cardholder walkthrough's own advance, as a transaction a judge
+              can open. No latency figure: the run did not time the path from
+              refund message to balance, so the page does not claim one. */}
+          {cardholderRun?.advanceTx && (
+            <div className="tile txt">
+              <div className="k">{t('tile.cardholderAdvance', lang)}</div>
+              <div className="v">
+                <Hash value={cardholderRun.advanceTx} chainId={cardholderRun.chainId} />
+                <small>{t('tile.cardholderAdvanceSub', lang)}</small>
+              </div>
+            </div>
+          )}
         </div>
 
         <p className="sec-k">{t('sec.roomToJoin', lang)}<span>{t('sec.roomToJoinSub', lang)}</span></p>
