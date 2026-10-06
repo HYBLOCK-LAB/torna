@@ -26,7 +26,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  snapshots, timepointIds, manifest, assertBundleIntegrity,
+  snapshots, timepointIds, assertBundleIntegrity,
   issuerRegion, refundLabel, acquirerLabel, acquirerId,
 } from './bundle';
 import { t, tp, type CopyKey, type Lang } from '@shared/copy';
@@ -40,6 +40,8 @@ import {
 } from './timepoints';
 import { NARRATIVE, CHIP_FIELDS, type ScreenKey as NScreen, type WatchLine, type WatchChip } from '@shared/narrative';
 import { Narrative, DeltaChips, deltasFor } from './narrative';
+import { txUrl, addressUrl } from './explorer';
+import { fetchHead, hasRpc, type LiveHead } from './live';
 import type { ReactNode } from 'react';
 import { Donut, Gauge, Legend, Trail, type Slice } from './charts';
 import { CardholderApp, NextStep, type AppStatus } from './cardholder';
@@ -96,7 +98,7 @@ export default function App() {
   const [done, setDone] = useState<Set<TimepointId>>(new Set());
   const [briefOpen, setBriefOpen] = useState(true);
   const [intro, setIntro] = useState(true);
-  const [appStatus, setAppStatus] = useState<AppStatus>({ mode: 'off', step: 'home', finished: false, pipe: 0, settleSeconds: null, repaid: false });
+  const [appStatus, setAppStatus] = useState<AppStatus>({ mode: 'off', step: 'home', finished: false, pipe: 0, repaid: false });
   /** Screens with something new to see since the cardholder run finished. */
   const [dirty, setDirty] = useState<Set<ScreenKey>>(new Set());
   /**
@@ -176,7 +178,7 @@ export default function App() {
   const resetAll = () => {
     setReviewed(new Set()); setDone(new Set()); setSeen(new Set()); setDirty(new Set());
     setPending(null); setLastOps('issuer');
-    setAppStatus({ mode: 'off', step: 'home', finished: false, pipe: 0, settleSeconds: null, repaid: false });
+    setAppStatus({ mode: 'off', step: 'home', finished: false, pipe: 0, repaid: false });
     setRunKey((k) => k + 1);
     setCurrent('t0'); setScreen('user'); setBriefOpen(true); setNoteOpen(true);
   };
@@ -355,7 +357,7 @@ export default function App() {
                 />
               </>
             )
-              : screen === 'pub' ? <PublicView s={s} lang={lang} settleSeconds={appStatus.settleSeconds} trail={trail} />
+              : screen === 'pub' ? <PublicView s={s} lang={lang} trail={trail} />
               : screen === 'lp' ? <LpView s={s} lang={lang} />
               : screen === 'issuer' ? <IssuerView s={s} lang={lang} pipe={appStatus.pipe} />
               : screen === 'val' ? <VerifierView s={s} lang={lang} />
@@ -402,18 +404,39 @@ function Rich({ text }: { text: string }) {
 /* ── on-chain status bar ─────────────────────────────────────── */
 
 function ChainBar({ s, lang, onLang }: { s: Snapshot; lang: Lang; onLang: (lang: Lang) => void }) {
+  /* One question to the chain, once per page load. See live.ts for why this
+     is the only part of the demo that needs a network. */
+  const [head, setHead] = useState<LiveHead>(() => (hasRpc(s.chainId) ? { state: 'asking' } : { state: 'off' }));
+  useEffect(() => {
+    if (!hasRpc(s.chainId)) { setHead({ state: 'off' }); return; }
+    let alive = true;
+    fetchHead(s.chainId).then((block) => {
+      if (!alive) return;
+      setHead(block === null ? { state: 'failed' } : { state: 'ok', block });
+    });
+    return () => { alive = false; };
+    // The chain does not change while the page is open; the bundle is one run.
+  }, [s.chainId]);
+
   return (
     <div className="chain">
       <div className="wrap">
         <span className="ci"><span className="ci-k">Monad Testnet</span></span>
         <span className="ci"><span className="ci-k">{t('chain.chain', lang)}</span><b className="mono">{s.chainId}</b></span>
         <span className="ci"><span className="ci-k">{t('chain.block', lang)}</span><b className="mono">{n0(s.blockNumber)}</b></span>
-        <span className="ci"><span className="ci-k">{t('chain.contract', lang)}</span><b className="mono">{short(s.contract)}</b></span>
+        <span className="ci"><span className="ci-k">{t('chain.contract', lang)}</span>
+          <b className="mono"><Hash value={s.contract} chainId={s.chainId} kind="address" /></b></span>
         <span className="ci">
           <span className="ci-k">{t('chain.lastEvent', lang)}</span>
           <b className="mono">{s.events[0]?.name ?? '—'}</b>
         </span>
-        <span className="ci"><span className="dot" />{t('chain.synced', lang)}</span>
+        {head.state === 'ok' && (
+          <span className="ci live">
+            <span className="dot" />
+            <span className="ci-k">{t('chain.liveHead', lang)}</span>
+            <b className="mono">{n0(head.block)}</b>
+          </span>
+        )}
         <span className="ci switch-note"><span>{t('chain.oneLedger', lang)}</span></span>
         <div className="seg">
           <button type="button" aria-pressed={lang === 'en'} onClick={() => onLang('en')}>{t('app.langEn', lang)}</button>
@@ -843,7 +866,7 @@ function NoteChips({ chips, s, lang }: { chips: WatchChip[]; s: Snapshot; lang: 
           if (!ev) return <b key={j} className="narr-miss">⟨tx:{c.tx}⟩</b>;
           return (
             <span key={j} className="chip tx mono">
-              <span className="hashlink">{short(ev.txHash)}</span>
+              <Hash value={ev.txHash} chainId={s.chainId} />
             </span>
           );
         }
@@ -939,7 +962,8 @@ function fieldLabel(path: string, lang: Lang): string {
 
 /* ── public view ─────────────────────────────────────────────── */
 
-function PublicView({ s, lang, settleSeconds, trail }: { s: Snapshot; lang: Lang; settleSeconds: number | null; trail: Array<{ id: string; value: number }> }) {
+function PublicView({ s, lang, trail }: { s: Snapshot; lang: Lang; trail: Array<{ id: string; value: number }> }) {
+
   const p = s.pool;
   const m = s.metrics;
   const tvl = totalValueLocked(s);
@@ -978,7 +1002,7 @@ function PublicView({ s, lang, settleSeconds, trail }: { s: Snapshot; lang: Lang
           </div>
           <div className="pubmeta">
             <span><b>Monad Testnet</b></span>
-            <span className="mono">{short(s.contract)}</span>
+            <span className="mono"><Hash value={s.contract} chainId={s.chainId} kind="address" /></span>
             <span className="mono">block {n0(s.blockNumber)}</span>
           </div>
         </div>
@@ -1039,13 +1063,6 @@ function PublicView({ s, lang, settleSeconds, trail }: { s: Snapshot; lang: Lang
           <Tile
             k={t('tile.rejected', lang)} v={n0(m.rejectedRequests)}
             tone={m.rejectedRequests ? 'warn' : undefined}
-          />
-          {/* The latency the cardholder run just produced, carried through to
-              the public dashboard. It is the demo's headline number. */}
-          <Tile
-            k={t('tile.settleToSpend', lang)}
-            v={settleSeconds !== null ? `${settleSeconds}s` : '—'}
-            u={t('tile.lastOne', lang)}
           />
         </div>
 
@@ -1169,7 +1186,7 @@ function PublicView({ s, lang, settleSeconds, trail }: { s: Snapshot; lang: Lang
       <div className="panel" id="p-pub-ev">
         <h3>{t('panel.events', lang)}</h3>
         <p className="hint">{t('hint.events', lang)}</p>
-        <div className="scroll">
+        <div className="scroll tall">
           <table>
             <thead>
               <tr>
@@ -1179,7 +1196,7 @@ function PublicView({ s, lang, settleSeconds, trail }: { s: Snapshot; lang: Lang
               </tr>
             </thead>
             <tbody>
-              {s.events.slice(0, 12).map((e, i) => (
+              {s.events.map((e, i) => (
                 <tr key={`${e.txHash}-${i}`}>
                   <td className="mono">
                     {n0(e.blockNumber)}
@@ -1190,7 +1207,7 @@ function PublicView({ s, lang, settleSeconds, trail }: { s: Snapshot; lang: Lang
                   <td className="mono">{e.name}</td>
                   <td className="mono">{short(e.target)}</td>
                   <td className="num">{e.amount ? n0(e.amount) : '—'}</td>
-                  <td className="mono"><span className="hashlink">{short(e.txHash)}</span></td>
+                  <td className="mono"><Hash value={e.txHash} chainId={s.chainId} /></td>
                 </tr>
               ))}
               {s.events.length === 0 && (
@@ -1199,12 +1216,14 @@ function PublicView({ s, lang, settleSeconds, trail }: { s: Snapshot; lang: Lang
             </tbody>
           </table>
         </div>
+        {s.events.length > 0 && (
+          <p className="note evmore">
+            {t('pub.evCount', lang).replace('{total}', n0(s.events.length))}
+          </p>
+        )}
         <p className="note">{t('note.pastReturns', lang)}</p>
       </div>
 
-      <p className="hint mono">
-        run {manifest?.runId} · {s.timepointId} · {s.capturedAt}
-      </p>
     </section>
   );
 }
@@ -1215,6 +1234,34 @@ function PublicView({ s, lang, settleSeconds, trail }: { s: Snapshot; lang: Lang
  * The smallest screen, and the one that carries the argument: a loss is not a
  * date passing, it is a ruling. Everything here is read from position state.
  */
+/**
+ * A hash, as a link to the block explorer for the chain this bundle came from.
+ * No explorer for that chain (a local run) means no link — a dead link would
+ * weaken exactly the claim this is here to support.
+ */
+function Hash({ value, chainId, kind = 'tx' }: { value: string; chainId: number; kind?: 'tx' | 'address' }) {
+  const href = kind === 'tx' ? txUrl(chainId, value) : addressUrl(chainId, value);
+  if (!href) return <span className="hashlink off">{short(value)}</span>;
+  return (
+    <a className="hashlink" href={href} target="_blank" rel="noreferrer noopener">
+      {short(value)}
+    </a>
+  );
+}
+
+/**
+ * Which rows a reader should meet first. Not a severity scale — an attention
+ * one: a position still waiting on something outranks one that has closed,
+ * because the closed ones are the background and the open one is the story.
+ */
+const STATE_RANK: Record<string, number> = {
+  Overdue: 0, Review: 1, CapHeld: 2, CoveredLoss: 3, RecoveryRecorded: 4,
+  Advanced: 5, Registered: 6, Repaid: 7,
+};
+function stateRank(state: string): number {
+  return STATE_RANK[state] ?? 9;
+}
+
 function VerifierView({ s, lang }: { s: Snapshot; lang: Lang }) {
   const pending = s.positions
     .filter((p) => p.state === 'Review' || p.state === 'CoveredLoss' || p.state === 'CapHeld')
@@ -1582,12 +1629,17 @@ function IssuerView({ s, lang, pipe }: { s: Snapshot; lang: Lang; pipe: number }
   if (!iss) return <Placeholder screen="issuer" lang={lang} />;
 
   const { required, usagePct, headroom, free } = issuerMargin(iss);
-  /* Newest scenario first. A position table read top-down should start with
-     what just happened — the year's old rows are context, not the news. */
+  /* Newest scenario first — a table read top-down should start with what just
+     happened; the year's old rows are context, not the news. Within one
+     scenario the rows that are still open come before the ones that closed:
+     with 183 positions per issuer, "365 handled and one still awaiting a
+     ruling" is only visible if that one is not 300 rows down. */
   const positions = s.positions
     .filter((p) => p.issuer === iss.key)
     .slice()
-    .sort((a, b) => b.createdAtTimepoint - a.createdAtTimepoint);
+    .sort((a, b) =>
+      b.createdAtTimepoint - a.createdAtTimepoint || stateRank(a.state) - stateRank(b.state));
+
 
   return (
     <section className="stack" data-pane="issuer">
@@ -1700,7 +1752,7 @@ function IssuerView({ s, lang, pipe }: { s: Snapshot; lang: Lang; pipe: number }
 
       <div className="panel" id="p-iss-pos">
         <h3>{t('panel.positions', lang)}</h3>
-        <div className="scroll">
+        <div className="scroll tall">
           <table>
             <thead>
               <tr>
@@ -1735,7 +1787,7 @@ function IssuerView({ s, lang, pipe }: { s: Snapshot; lang: Lang; pipe: number }
                       </div>
                     )}
                   </td>
-                  <td className="mono"><span className="hashlink">{short(p.txHash)}</span></td>
+                  <td className="mono"><Hash value={p.txHash} chainId={s.chainId} /></td>
                 </tr>
               ))}
               {positions.length === 0 && (
@@ -1744,6 +1796,11 @@ function IssuerView({ s, lang, pipe }: { s: Snapshot; lang: Lang; pipe: number }
             </tbody>
           </table>
         </div>
+        {positions.length > 0 && (
+          <p className="note evmore">
+            {t('iss.posCount', lang).replace('{total}', n0(positions.length))}
+          </p>
+        )}
       </div>
     </section>
   );
@@ -1772,12 +1829,20 @@ function PositionState({ state, lang }: { state: PositionStateT; lang: Lang }) {
  * Which scenario a row came from. Seq 0 is not a scenario — it is the
  * cardholder run the viewer just did, and saying "S0" would invent one.
  */
+/* `createdAtTimepoint` is the snapshot's sequence index (t3b is 4, t4 is 5),
+   not the scenario number. Printing it as S{n} shifted every chip after 3b by
+   one or two, so map it back to the timepoint id before labelling. */
+const TP_BY_SEQ: Record<number, TimepointId> = Object.fromEntries(
+  timepointIds.map((id) => [snapshots[id].seq, id]),
+);
+
 function ScenChip({ seq, lang }: { seq: number; lang: Lang }) {
-  return (
-    <span className="scchip">
-      {seq === 0 ? t('scen.chipRun', lang) : t('scen.chip', lang).replace('{n}', String(seq))}
-    </span>
-  );
+  const id = TP_BY_SEQ[seq];
+  if (seq === 0 || id === 't0') {
+    return <span className="scchip">{t('scen.chipRun', lang)}</span>;
+  }
+  const n = id ? id.slice(1) : String(seq);
+  return <span className="scchip">{t('scen.chip', lang).replace('{n}', n)}</span>;
 }
 
 function Tile({ k, v, u, tone, text }: {
