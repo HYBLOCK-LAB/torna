@@ -1,0 +1,125 @@
+{
+  "schemaVersion": 1,
+  "runId": "run-testnet-20261001-a",
+  "generatedAt": "2026-10-01T10:19:53.595Z",
+  "source": "One Monad Testnet deployment with seeded Postgres ledger",
+  "timepoints": [
+    {
+      "timepointId": "t0",
+      "seq": 0,
+      "label": {
+        "en": "Cardholder refund experience",
+        "ko": "사용자 앱 환불 체험"
+      },
+      "file": "t0.json"
+    },
+    {
+      "timepointId": "t1",
+      "seq": 1,
+      "label": {
+        "en": "One year of normal operation",
+        "ko": "1년 정상 운영"
+      },
+      "file": "t1.json"
+    },
+    {
+      "timepointId": "t2",
+      "seq": 2,
+      "label": {
+        "en": "Confirmed loss → waterfall",
+        "ko": "최종 손실 → 워터폴"
+      },
+      "file": "t2.json"
+    },
+    {
+      "timepointId": "t3",
+      "seq": 3,
+      "label": {
+        "en": "Correlated loss → cap triggered",
+        "ko": "상관 손실 → 상한 발동"
+      },
+      "file": "t3.json"
+    },
+    {
+      "timepointId": "t3b",
+      "seq": 4,
+      "label": {
+        "en": "Recovery settlement",
+        "ko": "회수 정산"
+      },
+      "file": "t3b.json"
+    },
+    {
+      "timepointId": "t4",
+      "seq": 5,
+      "label": {
+        "en": "LP withdrawal and liquidity",
+        "ko": "LP 출금 · 유동성"
+      },
+      "file": "t4.json"
+    },
+    {
+      "timepointId": "t4b",
+      "seq": 6,
+      "label": {
+        "en": "LP withdrawal and liquidity · follow-up",
+        "ko": "LP 출금 · 유동성 · 후속"
+      },
+      "file": "t4b.json"
+    },
+    {
+      "timepointId": "t5",
+      "seq": 7,
+      "label": {
+        "en": "Delayed but repaid",
+        "ko": "지연 후 정상 상환"
+      },
+      "file": "t5.json"
+    },
+    {
+      "timepointId": "t6",
+      "seq": 8,
+      "label": {
+        "en": "External venue frozen",
+        "ko": "외부 운용처 동결"
+      },
+      "file": "t6.json"
+    },
+    {
+      "timepointId": "t7",
+      "seq": 9,
+      "label": {
+        "en": "Chain succeeded, ledger failed",
+        "ko": "체인 성공 · DB 실패"
+      },
+      "file": "t7.json"
+    },
+    {
+      "timepointId": "t8",
+      "seq": 10,
+      "label": {
+        "en": "Invalid requests rejected",
+        "ko": "부정 요청 거절"
+      },
+      "file": "t8.json"
+    },
+    {
+      "timepointId": "t9",
+      "seq": 11,
+      "label": {
+        "en": "More issuers join",
+        "ko": "발급사가 늘어날 때"
+      },
+      "file": "t9.json"
+    },
+    {
+      "timepointId": "t9b",
+      "seq": 12,
+      "label": {
+        "en": "Capital arrives",
+        "ko": "자본이 몰려올 때"
+      },
+      "file": "t9b.json"
+    }
+  ]
+}

@@ -1,0 +1,284 @@
+import { readFileSync } from 'node:fs';
+
+import {
+  createPublicClient,
+  createWalletClient,
+  encodeFunctionData,
+  fallback,
+  formatEther,
+  http,
+  type Abi,
+  type Address,
+  type Hex,
+} from 'viem';
+
+import {
+  LocalT0ChainMismatchError,
+  LocalT0ConfigurationError,
+} from './runtime/errors';
+import type { LocalT0Config, LocalT0SigningAccounts } from './runtime/local-config';
+import { publicActors } from './runtime/local-config';
+import {
+  MONAD_TESTNET_CHAIN_ID,
+  type MonadTestnetConfig,
+} from './runtime/testnet-config';
+import { assertPublicT0RunContext, type ConfirmedTransaction, type T0RunContext } from './runtime/types';
+
+export type LocalT0Actor = keyof LocalT0SigningAccounts;
+
+export interface ContractArtifact {
+  abi: Abi;
+  bytecode: Hex;
+}
+
+export interface LocalT0Session {
+  /** Private configuration: never serialize or expose this object. */
+  config: LocalT0Config | MonadTestnetConfig;
+  target: 'local' | 'testnet';
+  publicClient: ReturnType<typeof createPublicClient>;
+}
+
+function readArtifact(file: string): ContractArtifact {
+  let artifact: { abi?: Abi; bytecode?: { object?: string } };
+  try {
+    artifact = JSON.parse(readFileSync(new URL(file, import.meta.url), 'utf8'));
+  } catch {
+    throw new LocalT0ConfigurationError(
+        `Missing compiled artifact ${file}. Run the contracts build before local t0.`);
+  }
+  const bytecode = artifact.bytecode?.object;
+  if (!artifact.abi || !bytecode || bytecode === '0x') {
+    throw new LocalT0ConfigurationError(`Compiled artifact ${file} has no deployable bytecode.`);
+  }
+  return { abi: artifact.abi, bytecode: bytecode as Hex };
+}
+
+export function loadProtocolArtifacts(): { mockUsdc: ContractArtifact; torna: ContractArtifact } {
+  return {
+    mockUsdc: readArtifact('../out/MockUSDC.sol/MockUSDC.json'),
+    torna: readArtifact('../out/Torna.sol/Torna.json'),
+  };
+}
+
+export function createLocalT0Session(config: LocalT0Config | MonadTestnetConfig): LocalT0Session {
+  const testnet = 'target' in config && config.target === 'testnet';
+  // Testnet receipts can span many blocks. Avoid hammering the RPC while waiting,
+  // and tolerate short transport outages without changing the signed request.
+  const transportOptions = {timeout: 20_000, retryCount: 8, retryDelay: 500};
+  const transport = testnet
+    ? fallback([
+      http(config.rpcUrl, transportOptions),
+      http('https://testnet-rpc.monad.xyz', transportOptions),
+    ]) : http(config.rpcUrl);
+  return {
+    config,
+    target: 'target' in config ? config.target : 'local',
+    publicClient: createPublicClient({transport, pollingInterval: testnet ? 1_000 : 100}),
+  };
+}
+
+function wallet(session: LocalT0Session, actor: LocalT0Actor) {
+  return createWalletClient({
+    account: session.config.accounts[actor],
+    transport: http(session.config.rpcUrl, session.target === 'testnet'
+      ? {timeout: 20_000, retryCount: 8, retryDelay: 500} : undefined),
+  });
+}
+
+async function confirm(
+    session: LocalT0Session, name: string, hash: Hex): Promise<ConfirmedTransaction> {
+  const receipt = await session.publicClient.waitForTransactionReceipt({ hash });
+  if (receipt.status !== 'success') {
+    throw new Error(`${name} transaction reverted before confirmation.`);
+  }
+  return {
+    name,
+    hash,
+    blockNumber: receipt.blockNumber,
+    ...(receipt.contractAddress ? { contractAddress: receipt.contractAddress } : {}),
+  };
+}
+
+/** Send a contract call and retain only public receipt metadata. */
+export async function submitContract(
+    session: LocalT0Session,
+    actor: LocalT0Actor,
+    address: Address,
+    abi: Abi,
+    functionName: string,
+    args: readonly unknown[],
+    name: string,
+): Promise<ConfirmedTransaction> {
+  const data = encodeFunctionData({ abi, functionName, args } as never);
+  const hash = await wallet(session, actor).sendTransaction({
+    account: session.config.accounts[actor],
+    // The RPC chain id is checked in preflight rather than hard-coded here.
+    chain: undefined,
+    to: address,
+    data,
+  });
+  return confirm(session, name, hash);
+}
+
+/** Read a public contract value. Callers must narrow the result before using it. */
+export async function readContractValue(
+    session: LocalT0Session,
+    address: Address,
+    abi: Abi,
+    functionName: string,
+    args: readonly unknown[] = [],
+    blockNumber?: bigint,
+): Promise<unknown> {
+  return session.publicClient.readContract({
+    address, abi, functionName, args, ...(blockNumber === undefined ? {} : { blockNumber }),
+  } as never);
+}
+
+/**
+ * This runner is local-only. Reading and comparing the RPC chain id prevents
+ * a copied environment file from broadcasting to Monad Testnet by mistake.
+ */
+export async function preflightLocalT0(session: LocalT0Session): Promise<void> {
+  if (session.target !== 'local') {
+    throw new LocalT0ConfigurationError('Local runner refuses non-local execution configuration.');
+  }
+  const actualChainId = await session.publicClient.getChainId();
+  if (actualChainId !== session.config.chainId) {
+    throw new LocalT0ChainMismatchError(session.config.chainId, actualChainId);
+  }
+  if (actualChainId === 10143) {
+    throw new LocalT0ConfigurationError('Local t0 refuses Monad Testnet (10143).');
+  }
+  loadProtocolArtifacts();
+  for (const actor of [
+    'deployer', 'verifier', 'submitter',
+    'lp01', 'lp02', 'lp03', 'lp04', 'lp05', 'lp06',
+  ] as const) {
+    const balance = await session.publicClient.getBalance({
+      address: session.config.accounts[actor].address,
+    });
+    if (balance === 0n) {
+      throw new LocalT0ConfigurationError(
+          `Local account ${actor} has no native balance for its required transaction gas.`);
+    }
+  }
+}
+
+/** Read-only Testnet preflight. Broadcast opt-in is required by the config loader. */
+export async function preflightMonadTestnet(session: LocalT0Session): Promise<void> {
+  if (session.target !== 'testnet' || !('gasBudgetWei' in session.config)) {
+    throw new LocalT0ConfigurationError('Testnet preflight requires explicit Testnet configuration.');
+  }
+  const actualChainId = await session.publicClient.getChainId();
+  if (actualChainId !== MONAD_TESTNET_CHAIN_ID) {
+    throw new LocalT0ChainMismatchError(MONAD_TESTNET_CHAIN_ID, actualChainId);
+  }
+  loadProtocolArtifacts();
+  const actors = [
+    'deployer', 'verifier', 'submitter',
+    'lp01', 'lp02', 'lp03', 'lp04', 'lp05', 'lp06',
+  ] as const;
+  let totalBalance = 0n;
+  for (const actor of actors) {
+    const balance = await session.publicClient.getBalance({
+      address: session.config.accounts[actor].address,
+    });
+    if (balance === 0n) {
+      throw new LocalT0ConfigurationError(
+          `Testnet account ${actor} has no MON for its required transaction gas.`);
+    }
+    totalBalance += balance;
+  }
+  if (totalBalance < session.config.gasBudgetWei) {
+    throw new LocalT0ConfigurationError(
+        'Testnet signers have less combined MON than the explicitly configured gas budget.');
+  }
+}
+
+/** Measure confirmed gas from this run only, grouped by each derived signer. */
+export async function measureTestnetGas(
+    session: LocalT0Session, context: T0RunContext, throughBlock: bigint): Promise<string> {
+  if (session.target !== 'testnet' || context.chainId !== MONAD_TESTNET_CHAIN_ID) {
+    throw new LocalT0ConfigurationError('Gas measurement requires a confirmed Testnet run.');
+  }
+  const actors = [
+    'deployer', 'verifier', 'submitter',
+    'lp01', 'lp02', 'lp03', 'lp04', 'lp05', 'lp06',
+  ] as const;
+  const senders = new Map(actors.map(actor => [
+    session.config.accounts[actor].address.toLowerCase(), actor,
+  ]));
+  const gasByActor = new Map<(typeof actors)[number], {count: number; wei: bigint}>(
+      actors.map(actor => [actor, {count: 0, wei: 0n}]));
+  let transactionCount = 0;
+  const firstBlock = context.deploymentBlock > 0n ? context.deploymentBlock - 1n : 0n;
+  for (let number = firstBlock; number <= throughBlock; number++) {
+    const block = await session.publicClient.getBlock({blockNumber: number, includeTransactions: true});
+    for (const transaction of block.transactions) {
+      if (typeof transaction === 'string') continue;
+      const actor = senders.get(transaction.from.toLowerCase());
+      if (!actor) continue;
+      const receipt = await session.publicClient.getTransactionReceipt({hash: transaction.hash});
+      if (receipt.effectiveGasPrice === undefined) {
+        throw new Error('Confirmed Testnet receipt did not report its effective gas price.');
+      }
+      const item = gasByActor.get(actor)!;
+      item.count += 1;
+      item.wei += receipt.gasUsed * receipt.effectiveGasPrice;
+      transactionCount += 1;
+    }
+  }
+  const totalWei = [...gasByActor.values()].reduce((sum, item) => sum + item.wei, 0n);
+  return JSON.stringify({
+    runId: context.runId,
+    chainId: context.chainId,
+    transactionCount,
+    gasSpentMon: formatEther(totalWei),
+    bySigner: Object.fromEntries([...gasByActor].map(([actor, item]) => [
+      actor,
+      {address: session.config.accounts[actor].address, transactionCount: item.count,
+        gasSpentMon: formatEther(item.wei)},
+    ])),
+  }, null, 2);
+}
+
+/** Deploy only the two PRD contracts after preflight has explicitly succeeded. */
+export async function deployProtocol(session: LocalT0Session): Promise<T0RunContext> {
+  const { mockUsdc, torna } = loadProtocolArtifacts();
+  const deployer = wallet(session, 'deployer');
+  const assetHash = await deployer.deployContract({
+    account: session.config.accounts.deployer,
+    abi: mockUsdc.abi,
+    bytecode: mockUsdc.bytecode,
+    args: [session.config.accounts.deployer.address],
+  } as never);
+  const assetReceipt = await confirm(session, 'MockUSDC deployment', assetHash);
+  const asset = assetReceipt.contractAddress;
+  if (!asset) throw new Error('MockUSDC deployment receipt has no contract address.');
+
+  const tornaHash = await deployer.deployContract({
+    account: session.config.accounts.deployer,
+    abi: torna.abi,
+    bytecode: torna.bytecode,
+    args: [
+      asset,
+      session.config.accounts.deployer.address,
+      session.config.accounts.verifier.address,
+      session.config.accounts.submitter.address,
+    ],
+  } as never);
+  const tornaReceipt = await confirm(session, 'Torna deployment', tornaHash);
+  const tornaAddress = tornaReceipt.contractAddress;
+  if (!tornaAddress) throw new Error('Torna deployment receipt has no contract address.');
+
+  const context: T0RunContext = {
+    runId: session.config.runId,
+    chainId: session.config.chainId,
+    torna: tornaAddress,
+    asset,
+    deploymentBlock: tornaReceipt.blockNumber,
+    actors: publicActors(session.config.accounts),
+  };
+  assertPublicT0RunContext(context);
+  return context;
+}

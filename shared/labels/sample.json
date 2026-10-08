@@ -1,0 +1,102 @@
+{
+  "runId": "sample",
+  "note": "체인에는 keccak256 해시만 올라가므로 사람이 읽는 값은 여기서만 나온다. 실행 1회당 한 번 생성한다.",
+  "refunds": {
+    "0x9f41089dda4350a77a31d937da559e23e4510de39609e4a88c9fc54a20da0e1f": {
+      "refundId": "REF-2026-001",
+      "amountUsdc": 1000
+    },
+    "0x623326bbdc69494053d0deb60f14ee7729bc0385bcad6f10a79d4a51667472c7": {
+      "refundId": "REF-2026-021",
+      "amountUsdc": 1000
+    },
+    "0xf81d3e00e2f0f69279de7ca4b08c2e9ecc938adc61a6a1c2abec1ea8bdfe6376": {
+      "refundId": "REF-2026-031",
+      "amountUsdc": 1000
+    },
+    "0x10172677b37dd6a84362e29b985702b85c8ffc0291ce9846f35372a4a19f05ad": {
+      "refundId": "REF-2026-032",
+      "amountUsdc": 1000
+    },
+    "0xb87b46d8d839bf7fd568bd9c8b160c6159805b399e1f250c25ab7d81cafec803": {
+      "refundId": "REF-2026-033",
+      "amountUsdc": 1000
+    },
+    "0x2fde037b48def78bc2467363ae203dff036dc54638949bd7cefe3ad49cf14948": {
+      "refundId": "REF-2026-034",
+      "amountUsdc": 1000
+    },
+    "0xed41a525d330e09164fa4fe28f561d7140ddfd16ae6e4808ed0869fbeacc5a6c": {
+      "refundId": "REF-2026-170",
+      "amountUsdc": 1000
+    },
+    "0x55226caed4d61b462ae102eee3de86e9b754552fb789cbb48641c2a42ff9dcf6": {
+      "refundId": "REF-2026-171",
+      "amountUsdc": 1000
+    },
+    "0x8eede992d7a02609821b132ec33c699224dd04cf3bf5a105191368db162a2b4c": {
+      "refundId": "REF-2026-172",
+      "amountUsdc": 1000
+    },
+    "0x1a7d2e956230ac961c90a2e33b98e412741f7418680ef3162cd483c009836bf9": {
+      "refundId": "REF-2026-173",
+      "amountUsdc": 1000
+    },
+    "0x912a5ac6050543a0e6603366dd67db78fecba45149041f08f61fce0f8f9e2663": {
+      "refundId": "REF-2026-014",
+      "amountUsdc": 1000
+    },
+    "0x0941ee3553c0c201880e1a62b94ad82d88a3c4ca0257cf84e34d18a49dca5498": {
+      "refundId": "REF-2026-210",
+      "amountUsdc": 1000
+    },
+    "0x409b94d9953b301ad9300d0a86ca852287b6672e06b05d7f315dd0b1e22c415e": {
+      "refundId": "REF-2026-211",
+      "amountUsdc": 1000
+    }
+  },
+  "acquirers": {
+    "0xea2b5fc87a034a1947b3a920f51605b48a88116bdd6d455d1b25f904d81ee917": {
+      "acquirerId": "ACQ-α",
+      "displayName": "Acquirer α (Alpha)"
+    },
+    "0x5f7ebc300ba839dbfc23098f1651eed019d1d84393764651113d02bb4cd57842": {
+      "acquirerId": "ACQ-β",
+      "displayName": "Acquirer β (Beta)"
+    },
+    "0xd6bc13126ed70f9f0962f1afccc817caa2e2b2f816f6f302394d1f0f6bc5b822": {
+      "acquirerId": "ACQ-γ",
+      "displayName": "Acquirer γ (Gamma)"
+    },
+    "0x39e570113ef547110a4bd349a7b5e8067f0bbe267eaa2b48b27ea97415502cf1": {
+      "acquirerId": "ACQ-δ",
+      "displayName": "Acquirer δ (Delta)"
+    },
+    "0xfb233e795ea11f332a6b3fdec6dcd137ab78a15b416adace442ef7a5adc5db30": {
+      "acquirerId": "ACQ-ε",
+      "displayName": "Acquirer ε (Epsilon)"
+    }
+  },
+  "issuers": {
+    "HYBRID": {
+      "name": "HYBRID Travel Card",
+      "region": "North America / Europe"
+    },
+    "AURA": {
+      "name": "AURA Travel Card",
+      "region": "Asia"
+    },
+    "NOVA": {
+      "name": "NOVA Travel Card",
+      "region": "Middle East / Africa"
+    },
+    "MERIDIAN": {
+      "name": "MERIDIAN Travel Card",
+      "region": "South America"
+    },
+    "KITE": {
+      "name": "KITE Travel Card",
+      "region": "Oceania"
+    }
+  }
+}
