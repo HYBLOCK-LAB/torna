@@ -1,4 +1,4 @@
-/** Wire format from docs/interface-draft.md. No signing or business approval happens here. */
+/** EIP-712 wire format for AdvanceRequest. No signing or business approval happens here. */
 export const MONAD_TESTNET_CHAIN_ID = 10143;
 export const EIP712_NAME = 'Torna';
 export const EIP712_VERSION = '1';
