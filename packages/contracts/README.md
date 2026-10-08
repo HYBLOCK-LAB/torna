@@ -218,7 +218,7 @@ permit remains valid if the later advance reverts. Reentrancy is blocked on both
 No complete adapter integration or 13-snapshot run is claimed. The local t0 runner is
 documented below; it is restricted to explicit loopback configuration and refuses to
 write a partial snapshot while required on-chain metrics are unavailable.
-See `shared/abi/advance.ts`, `test/Advance.t.sol` and `docs/CONTRACT_LEARNING.md`.
+See `shared/abi/advance.ts` and `test/Advance.t.sol`.
 
 ## Full-principal repayment (2026-09-21)
 
@@ -295,7 +295,7 @@ All commands below run from the repository root.
 
 For the complete local contract gate, run `corepack pnpm --filter @torna/contracts check`.
 It checks formatting, compilation, exported ABI freshness, types and all tests without
-overwriting the shared ABI. See [Sunday handoff](SUNDAY_HANDOFF.md) for scope and follow-ups.
+overwriting the shared ABI.
 
 ```bash
 corepack pnpm --filter @torna/contracts build
