@@ -8,6 +8,7 @@ Built for **Monad Metropolis** — Consumer Products & Payments.
 |---|---|
 | Live demo | https://torna-six.vercel.app/ — replays a recorded Monad Testnet run, no wallet needed |
 | Pitch video (2 min) | https://youtu.be/1BkC3ps4lpg |
+| Technical demo (under 3 min) | https://youtu.be/VRPbUBbNsGw |
 | Network | Monad Testnet (chain id 10143) |
 | Contract | [`0xc43121a73e3e4a46b6a2a8827a34d9a324138ed6`](https://testnet.monadscan.com/address/0xc43121a73e3e4a46b6a2a8827a34d9a324138ed6) |
 | Recorded run | `run-testnet-20261001-a` — about 800 transactions, 806 on-chain events |
